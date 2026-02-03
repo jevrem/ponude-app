@@ -1,4 +1,3 @@
-# app/main.py
 import os
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import RedirectResponse, HTMLResponse
@@ -12,15 +11,16 @@ from .db import init_db, list_items, add_item, clear_items
 app = FastAPI()
 templates = Jinja2Templates(directory="app/templates")
 
+# --- sessions / auth ---
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-insecure-secret-change-me")
 app.add_middleware(
     SessionMiddleware,
     secret_key=SECRET_KEY,
     same_site="lax",
-    https_only=False,  # kasnije prebacimo na True kad sve ide preko https domene
+    https_only=True,  # sad si na HTTPS domeni -> bolje sigurnije
 )
 
-
+# --- DB init ---
 @app.on_event("startup")
 def _startup():
     init_db()
@@ -47,12 +47,13 @@ def login_form(request: Request):
 
 
 @app.post("/login", response_class=HTMLResponse)
-def login(request: Request, username: str = Form(...), password: str = Form(...)):
+def do_login(request: Request, username: str = Form(...), password: str = Form(...)):
     if verify_credentials(username, password):
         request.session["user"] = username
-        return RedirectResponse(url="/", status_code=HTTP_303_SEE_OTHER)
+        return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
     return templates.TemplateResponse(
-        "login.html", {"request": request, "error": "Pogrešan user ili lozinka."}
+        "login.html",
+        {"request": request, "error": "Pogrešan user ili lozinka."},
     )
 
 
@@ -62,25 +63,21 @@ def do_logout(request: Request):
     return RedirectResponse(url="/login", status_code=HTTP_303_SEE_OTHER)
 
 
+# -------------------------
+# OFFER (SQLite-backed)
+# -------------------------
+
 @app.get("/offer", response_class=HTMLResponse)
 def offer_page(request: Request):
     require_login(request)
     user = request.session.get("user")
-
     items = list_items(user)
-    # izračun ukupno po stavci + međuzbroj
-    for it in items:
-        it["total"] = float(it["qty"]) * float(it["price"])
-    subtotal = sum(it["total"] for it in items)
+
+    subtotal = round(sum(i["total"] for i in items), 2)
 
     return templates.TemplateResponse(
         "offer.html",
-        {
-            "request": request,
-            "user": user,
-            "items": items,
-            "subtotal": subtotal,
-        },
+        {"request": request, "user": user, "items": items, "subtotal": subtotal},
     )
 
 
@@ -88,15 +85,15 @@ def offer_page(request: Request):
 def offer_add(
     request: Request,
     name: str = Form(...),
-    qty: float = Form(...),
-    price: float = Form(...),
+    qty: float = Form(1.0),
+    price: float = Form(0.0),
 ):
     require_login(request)
     user = request.session.get("user")
 
     name = (name or "").strip()
     if name:
-        add_item(user, name, float(qty), float(price))
+        add_item(user, name=name, qty=float(qty), price=float(price))
 
     return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
 
