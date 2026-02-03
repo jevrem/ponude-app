@@ -61,6 +61,40 @@ def offer_page(request: Request):
         {
             "request": request,
             "user": request.session.get("user"),
-            "items": [],
+            "items" = request.session.get("offer_items", [])
+return templates.TemplateResponse(
+    "offer.html",
+    {"request": request, "user": request.session.get("user"), "items": items},
+)
         },
     )
+@app.post("/offer/add")
+def offer_add(
+    request: Request,
+    name: str = Form(...),
+    qty: float = Form(...),
+    price: float = Form(...),
+):
+    require_login(request)
+
+    items = request.session.get("offer_items", [])
+    total = float(qty) * float(price)
+
+    items.append(
+        {"name": name.strip(), "qty": float(qty), "price": float(price), "total": total}
+    )
+    request.session["offer_items"] = items
+
+    return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
+
+
+@app.post("/offer/delete")
+def offer_delete(request: Request, idx: int = Form(...)):
+    require_login(request)
+
+    items = request.session.get("offer_items", [])
+    if 0 <= idx < len(items):
+        items.pop(idx)
+    request.session["offer_items"] = items
+
+    return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
