@@ -1,1 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h2>Nova ponuda</h2>
+
+<table border="1" width="100%">
+  <thead>
+    <tr>
+      <th>Naziv</th>
+      <th>Količina</th>
+      <th>Cijena</th>
+      <th>Ukupno</th>
+    </tr>
+  </thead>
+
+  <tbody id="rows">
+    {% include "_rows.html" %}
+  </tbody>
+</table>
+
+<button 
+  hx-post="/offer/row"
+  hx-target="#rows"
+  hx-swap="beforeend">
+  + Dodaj stavku
+</button>
+
+{% endblock %}
 
