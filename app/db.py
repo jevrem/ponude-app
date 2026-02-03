@@ -1,20 +1,20 @@
-# app/db.py
 import os
 import sqlite3
 from contextlib import contextmanager
+from pathlib import Path
 
-DB_PATH = os.getenv("DB_PATH", "data/ponude.db")
+DB_PATH = os.getenv("DB_PATH", "ponude.db")
 
 
-def _ensure_dir():
-    d = os.path.dirname(DB_PATH)
-    if d and not os.path.exists(d):
-        os.makedirs(d, exist_ok=True)
+def _ensure_parent_dir():
+    p = Path(DB_PATH)
+    if p.parent and str(p.parent) not in (".", ""):
+        p.parent.mkdir(parents=True, exist_ok=True)
 
 
 @contextmanager
 def get_conn():
-    _ensure_dir()
+    _ensure_parent_dir()
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
@@ -28,36 +28,38 @@ def init_db():
     with get_conn() as conn:
         conn.execute(
             """
-            CREATE TABLE IF NOT EXISTS offer_item (
+            CREATE TABLE IF NOT EXISTS offer_items (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user TEXT NOT NULL,
                 name TEXT NOT NULL,
                 qty REAL NOT NULL,
                 price REAL NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
+                total REAL NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
             """
         )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_offer_items_user ON offer_items(user);")
 
 
 def list_items(user: str):
     with get_conn() as conn:
-        rows = conn.execute(
-            "SELECT id, user, name, qty, price FROM offer_item WHERE user = ? ORDER BY id ASC",
+        cur = conn.execute(
+            "SELECT id, name, qty, price, total FROM offer_items WHERE user=? ORDER BY id ASC",
             (user,),
-        ).fetchall()
-        return [dict(r) for r in rows]
+        )
+        return [dict(r) for r in cur.fetchall()]
 
 
 def add_item(user: str, name: str, qty: float, price: float):
+    total = round(qty * price, 2)
     with get_conn() as conn:
         conn.execute(
-            "INSERT INTO offer_item (user, name, qty, price) VALUES (?, ?, ?, ?)",
-            (user, name, qty, price),
+            "INSERT INTO offer_items(user, name, qty, price, total) VALUES(?,?,?,?,?)",
+            (user, name, qty, price, total),
         )
 
 
 def clear_items(user: str):
     with get_conn() as conn:
-        conn.execute("DELETE FROM offer_item WHERE user = ?", (user,))
-
+        conn.execute("DELETE FROM offer_items WHERE user=?", (user,))
