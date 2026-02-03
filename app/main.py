@@ -85,6 +85,7 @@ def offer_page(request: Request):
 
 
 @app.post("/offer/add")
+@app.post("/offer/add/")
 def offer_add(
     request: Request,
     name: str = Form(""),
@@ -95,14 +96,13 @@ def offer_add(
 
     name = (name or "").strip()
     if not name:
-        # ništa ne dodaj, vrati nazad
         return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
 
-    # sigurnost: brojevi u float
     try:
         qty_f = float(qty)
     except Exception:
         qty_f = 1.0
+
     try:
         price_f = float(price)
     except Exception:
@@ -110,18 +110,15 @@ def offer_add(
 
     total = qty_f * price_f
 
-    items = _get_offer_items(request)
-    items.append(
-        {
-            "name": name,
-            "qty": qty_f,
-            "price": price_f,
-            "total": total,
-        }
-    )
-    request.session["offer_items"] = items  # set za sigurnost
+    items = request.session.get("offer_items") or []
+    if not isinstance(items, list):
+        items = []
+
+    items.append({"name": name, "qty": qty_f, "price": price_f, "total": total})
+    request.session["offer_items"] = items
 
     return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
+
 
 
 @app.post("/offer/clear")
