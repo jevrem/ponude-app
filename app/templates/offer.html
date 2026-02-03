@@ -1,29 +1,39 @@
-{% extends "base.html" %}
-{% block content %}
+<!DOCTYPE html>
+<html lang="hr">
+<head>
+    <meta charset="UTF-8">
+    <title>Ponuda</title>
+    <style>
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ccc; padding: 6px; }
+        th { background: #f5f5f5; }
+        input { width: 100%; }
+    </style>
+</head>
+<body>
 
 <h2>Nova ponuda</h2>
 
-<table border="1" width="100%">
-  <thead>
-    <tr>
-      <th>Naziv</th>
-      <th>Količina</th>
-      <th>Cijena</th>
-      <th>Ukupno</th>
-    </tr>
-  </thead>
-
-  <tbody id="rows">
-    {% include "_rows.html" %}
-  </tbody>
+<table>
+    <thead>
+        <tr>
+            <th>Naziv</th>
+            <th>Količina</th>
+            <th>Cijena</th>
+            <th>Ukupno</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><input placeholder="npr. Ormar po mjeri"></td>
+            <td><input type="number" value="1"></td>
+            <td><input type="number" value="0"></td>
+            <td>0</td>
+        </tr>
+    </tbody>
 </table>
 
-<button 
-  hx-post="/offer/row"
-  hx-target="#rows"
-  hx-swap="beforeend">
-  + Dodaj stavku
-</button>
+<p><strong>Ovo je MVP tablica – logika dolazi odmah dalje.</strong></p>
 
-{% endblock %}
-
+</body>
+</html>
