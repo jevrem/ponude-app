@@ -122,6 +122,7 @@ def offer_add(
 
 
 @app.post("/offer/clear")
+@app.post("/offer/clear/")
 def offer_clear(request: Request):
     require_login(request)
     request.session["offer_items"] = []
