@@ -1,37 +1,24 @@
 import os
+
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.status import HTTP_303_SEE_OTHER
-from fastapi import Request
-from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
-
-templates = Jinja2Templates(directory="app/templates")
-
-@app.get("/offer", response_class=HTMLResponse)
-def offer_page(request: Request):
-    return templates.TemplateResponse(
-        "offer.html",
-        {
-            "request": request,
-            "items": []
-        }
-    )
-
 
 from .security import verify_credentials, require_login, logout
 
 app = FastAPI()
 templates = Jinja2Templates(directory="app/templates")
 
+# Security: obavezno postavi SECRET_KEY u Render Environment Variables
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-insecure-secret-change-me")
+
 app.add_middleware(
     SessionMiddleware,
     secret_key=SECRET_KEY,
     same_site="lax",
-    https_only=False,  # Render uses HTTPS; we can flip this later once domain is set
+    https_only=True,  # Render + custom domain = HTTPS
 )
 
 @app.get("/health")
@@ -56,14 +43,24 @@ def login(request: Request, username: str = Form(...), password: str = Form(...)
     if verify_credentials(username, password):
         request.session["user"] = username
         return RedirectResponse(url="/", status_code=HTTP_303_SEE_OTHER)
-    return templates.TemplateResponse("login.html", {"request": request, "error": "Pogrešan user ili lozinka."})
+    return templates.TemplateResponse(
+        "login.html",
+        {"request": request, "error": "Pogrešan user ili lozinka."},
+    )
 
 @app.post("/logout")
 def do_logout(request: Request):
     logout(request)
     return RedirectResponse(url="/login", status_code=HTTP_303_SEE_OTHER)
 
-@app.get("/app", response_class=HTMLResponse)
-def app_page(request: Request):
+@app.get("/offer", response_class=HTMLResponse)
+def offer_page(request: Request):
     require_login(request)
-    return templates.TemplateResponse("app.html", {"request": request, "user": request.session.get("user")})
+    return templates.TemplateResponse(
+        "offer.html",
+        {
+            "request": request,
+            "user": request.session.get("user"),
+            "items": [],
+        },
+    )
