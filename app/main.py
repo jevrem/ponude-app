@@ -10,13 +10,13 @@ from fastapi.templating import Jinja2Templates
 
 templates = Jinja2Templates(directory="app/templates")
 
-@app.post("/offer/row", response_class=HTMLResponse)
-def add_row(request: Request):
+@app.get("/offer", response_class=HTMLResponse)
+def offer_page(request: Request):
     return templates.TemplateResponse(
-        "_rows.html",
+        "offer.html",
         {
             "request": request,
-            "rows": [{}]
+            "items": []
         }
     )
 
