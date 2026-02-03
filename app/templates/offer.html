@@ -5,11 +5,11 @@
   <title>Nova ponuda</title>
   <style>
     body { font-family: system-ui, Arial; margin: 24px; }
-    table { border-collapse: collapse; width: 100%; }
+    table { border-collapse: collapse; width: 100%; margin-top: 14px; }
     th, td { border: 1px solid #ccc; padding: 8px; }
     th { background: #f5f5f5; text-align: left; }
     input[type="text"], input[type="number"] { width: 100%; box-sizing: border-box; padding: 6px; }
-    .row { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
+    .row { display: flex; gap: 12px; align-items: end; margin-bottom: 12px; }
     .btn { padding: 8px 12px; cursor: pointer; }
     .muted { color: #666; font-size: 14px; }
     .right { text-align: right; }
@@ -37,7 +37,7 @@
       <label>Ukupno</label>
       <input id="total" type="text" readonly value="0.00">
     </div>
-    <div style="flex: 1; align-self: end">
+    <div style="flex: 1">
       <button class="btn" type="submit">Dodaj</button>
     </div>
   </form>
@@ -67,6 +67,11 @@
         </td>
       </tr>
       {% endfor %}
+      {% if items|length == 0 %}
+      <tr>
+        <td colspan="5" class="muted">Nema stavki još. Dodaj prvu stavku gore.</td>
+      </tr>
+      {% endif %}
     </tbody>
   </table>
 
@@ -74,8 +79,7 @@
     function recalc() {
       const qty = parseFloat(document.getElementById("qty").value || "0");
       const price = parseFloat(document.getElementById("price").value || "0");
-      const total = qty * price;
-      document.getElementById("total").value = total.toFixed(2);
+      document.getElementById("total").value = (qty * price).toFixed(2);
     }
     document.getElementById("qty").addEventListener("input", recalc);
     document.getElementById("price").addEventListener("input", recalc);
