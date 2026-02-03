@@ -1,108 +1,98 @@
 <!DOCTYPE html>
 <html lang="hr">
 <head>
-  <meta charset="UTF-8" />
-  <title>Ponude - Nova ponuda</title>
+  <meta charset="UTF-8">
+  <title>Ponuda</title>
   <style>
-    body { font-family: Arial, sans-serif; padding: 16px; }
-    .top { display:flex; align-items:center; justify-content:space-between; margin-bottom: 14px; }
-    .muted { color:#666; font-size: 13px; }
-    .row { display:flex; gap: 12px; align-items: end; margin-bottom: 14px; }
-    .field { display:flex; flex-direction:column; gap:6px; }
-    input { padding: 8px; min-width: 220px; }
-    input[type="number"] { min-width: 120px; }
-    button { padding: 8px 12px; cursor:pointer; }
+    body { font-family: Arial, sans-serif; }
+    .row { display: flex; gap: 12px; align-items: end; margin: 12px 0 18px; }
+    .field { flex: 1; }
+    label { display: block; font-weight: 600; margin-bottom: 6px; }
+    input { width: 100%; padding: 8px; box-sizing: border-box; }
+    button { padding: 8px 14px; cursor: pointer; }
     table { border-collapse: collapse; width: 100%; margin-top: 10px; }
-    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-    th { background: #f6f6f6; }
-    .right { text-align:right; }
-    .actions { display:flex; gap: 8px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    th { background: #f5f5f5; }
+    td.num, th.num { text-align: right; }
+    .topbar { display: flex; justify-content: space-between; align-items: center; }
+    .muted { color: #666; font-size: 14px; }
+    .actions { display: flex; gap: 10px; align-items: center; margin-top: 10px; }
   </style>
 </head>
 <body>
 
-  <div class="top">
-    <div>
-      <h2 style="margin:0">Nova ponuda</h2>
-      <div class="muted">Prijavljen: {{ user }}</div>
-    </div>
-    <form method="post" action="/logout">
-      <button type="submit">Odjava</button>
-    </form>
+<div class="topbar">
+  <div>
+    <h2>Nova ponuda</h2>
+    <div class="muted">Prijavljen: {{ user }}</div>
   </div>
 
-  <form method="post" action="/offer/add">
-    <div class="row">
-      <div class="field" style="flex:1">
-        <label>Naziv</label>
-        <input name="name" placeholder="npr. Ormar po mjeri" required />
-      </div>
+  <form method="post" action="/logout">
+    <button type="submit">Odjava</button>
+  </form>
+</div>
 
-      <div class="field">
-        <label>Količina</label>
-        <input id="qty" name="qty" type="number" step="0.01" value="1" />
-      </div>
-
-      <div class="field">
-        <label>Cijena</label>
-        <input id="price" name="price" type="number" step="0.01" value="0" />
-      </div>
-
-      <div class="field">
-        <label>Ukupno</label>
-        <input id="total" type="text" value="0.00" readonly />
-      </div>
-
-      <div class="field">
-        <label>&nbsp;</label>
-        <button type="submit">Dodaj</button>
-      </div>
+<!-- FORM: ADD ITEM -->
+<form method="post" action="/offer/add">
+  <div class="row">
+    <div class="field" style="flex: 3;">
+      <label for="name">Naziv</label>
+      <input id="name" name="name" placeholder="npr. Ormar po mjeri" required>
     </div>
+
+    <div class="field">
+      <label for="qty">Količina</label>
+      <input id="qty" name="qty" type="number" step="0.01" value="1">
+    </div>
+
+    <div class="field">
+      <label for="price">Cijena</label>
+      <input id="price" name="price" type="number" step="0.01" value="0">
+    </div>
+
+    <div class="field">
+      <label>&nbsp;</label>
+      <button type="submit">Dodaj</button>
+    </div>
+  </div>
+</form>
+
+<div class="actions">
+  <!-- FORM: CLEAR ITEMS -->
+  <form method="post" action="/offer/clear" style="margin:0;">
+    <button type="submit">Obriši sve stavke</button>
   </form>
 
-  <div class="actions">
-    <form method="post" action="/offer/clear">
-      <button type="submit">Obriši sve stavke</button>
-    </form>
-    <div class="muted" style="align-self:center">Međuzbroj: <b>{{ subtotal }} €</b></div>
-  </div>
+  <div><strong>Međuzbroj:</strong> {{ "%.2f"|format(subtotal) }} €</div>
+</div>
 
-  <table>
-    <thead>
-      <tr>
-        <th>Naziv</th>
-        <th class="right">Količina</th>
-        <th class="right">Cijena</th>
-        <th class="right">Ukupno</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for i in items %}
-      <tr>
-        <td>{{ i.name }}</td>
-        <td class="right">{{ "%.2f"|format(i.qty) }}</td>
-        <td class="right">{{ "%.2f"|format(i.price) }}</td>
-        <td class="right">{{ "%.2f"|format(i.total) }}</td>
-      </tr>
+<table>
+  <thead>
+    <tr>
+      <th>Naziv</th>
+      <th class="num">Količina</th>
+      <th class="num">Cijena</th>
+      <th class="num">Ukupno</th>
+    </tr>
+  </thead>
+
+  <tbody>
+    {% if items and items|length > 0 %}
+      {% for it in items %}
+        <tr>
+          <td>{{ it.name }}</td>
+          <td class="num">{{ "%.2f"|format(it.qty) }}</td>
+          <td class="num">{{ "%.2f"|format(it.price) }}</td>
+          <td class="num">{{ "%.2f"|format(it.total) }}</td>
+        </tr>
       {% endfor %}
-      {% if items|length == 0 %}
+    {% else %}
       <tr>
-        <td colspan="4" class="muted">Nema stavki. Dodaj prvu stavku iznad.</td>
+        <td colspan="4" class="muted">Još nema stavki. Unesi prvu stavku iznad.</td>
       </tr>
-      {% endif %}
-    </tbody>
-  </table>
-
-  <script>
-    function recalc() {
-      const qty = parseFloat(document.getElementById("qty").value || "0");
-      const price = parseFloat(document.getElementById("price").value || "0");
-      document.getElementById("total").value = (qty * price).toFixed(2);
-    }
-    document.getElementById("qty").addEventListener("input", recalc);
-    document.getElementById("price").addEventListener("input", recalc);
-    recalc();
-  </script>
+    {% endif %}
+  </tbody>
+</table>
 
 </body>
 </html>
