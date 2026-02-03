@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="hr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ponude</title>
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; background: #f6f7fb; }
+    header { background: white; padding: 14px 18px; display:flex; justify-content: space-between; align-items:center; border-bottom: 1px solid #e5e7eb; }
+    main { padding: 18px; }
+    .card { background: white; border-radius: 12px; padding: 16px; box-shadow: 0 6px 20px rgba(0,0,0,.06); }
+    .muted { color:#6b7280; font-size: 13px; }
+    .btn { padding: 8px 10px; border-radius: 10px; border:1px solid #e5e7eb; background:#fff; cursor:pointer; }
+    .btn-primary { background:#111827; color:#fff; border-color:#111827; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <strong>Ponude</strong>
+      <div class="muted">Prijavljen: {{ user }}</div>
+    </div>
+    <form method="post" action="/logout">
+      <button class="btn" type="submit">Odjava</button>
+    </form>
+  </header>
+  <main>
+    <div class="card">
+      <h3>MVP kostur je online ✅</h3>
+      <p class="muted">Sljedeće: tablica stavki + PDF/Excel + baza.</p>
+      <button class="btn-primary btn" hx-get="/health" hx-target="#out" hx-swap="innerHTML">Test /health</button>
+      <pre id="out" class="muted"></pre>
+    </div>
+  </main>
+</body>
+</html>
