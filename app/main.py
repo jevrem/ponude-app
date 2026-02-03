@@ -10,15 +10,16 @@ from fastapi.templating import Jinja2Templates
 
 templates = Jinja2Templates(directory="app/templates")
 
-@app.get("/offer", response_class=HTMLResponse)
-def offer(request: Request):
+@app.post("/offer/row", response_class=HTMLResponse)
+def add_row(request: Request):
     return templates.TemplateResponse(
-        "offer.html",
+        "_rows.html",
         {
             "request": request,
-            "rows": []
+            "rows": [{}]
         }
     )
+
 
 from .security import verify_credentials, require_login, logout
 
