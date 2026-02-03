@@ -4,14 +4,45 @@ from contextlib import contextmanager
 import psycopg
 from psycopg.rows import dict_row
 
-# Set DATABASE_URL in Render (Neon connection string)
-DATABASE_URL = os.getenv("DATABASE_URL")
+
+def _normalize_db_url(raw: str) -> str:
+    """Normalize DATABASE_URL.
+
+    Accepts either a plain postgres URL or a Neon 'psql' snippet like:
+        psql 'postgres://user:pass@host/db?sslmode=require'
+
+    Returns a clean URL suitable for psycopg.connect().
+    """
+    s = (raw or "").strip()
+
+    # If user pasted the Neon CLI snippet, it often starts with: psql '...'
+    if s.startswith("psql"):
+        s = s[4:].strip()
+
+    # Strip wrapping quotes
+    if (s.startswith("'") and s.endswith("'")) or (s.startswith('"') and s.endswith('"')):
+        s = s[1:-1].strip()
+
+    # If there are still spaces, keep only first token (the URL itself has no spaces)
+    if " " in s:
+        s = s.split()[0].strip()
+        if (s.startswith("'") and s.endswith("'")) or (s.startswith('"') and s.endswith('"')):
+            s = s[1:-1].strip()
+
+    return s
 
 
 def _db_url() -> str:
-    if not DATABASE_URL:
-        raise RuntimeError("DATABASE_URL is not set in environment variables.")
-    return DATABASE_URL
+    raw = os.getenv("DATABASE_URL", "").strip()
+    if not raw:
+        raise RuntimeError("DATABASE_URL nije postavljen (Render Environment var).")
+
+    url = _normalize_db_url(raw)
+    if not (url.startswith("postgres://") or url.startswith("postgresql://")):
+        raise RuntimeError(
+            "DATABASE_URL izgleda krivo. Zalijepi samo postgres URL (bez 'psql')."
+        )
+    return url
 
 
 @contextmanager
@@ -20,59 +51,68 @@ def get_conn():
         yield conn
 
 
-def init_db() -> None:
-    """Create minimal tables if they don't exist."""
+def init_db():
     with get_conn() as conn:
         conn.execute(
             """
-            CREATE TABLE IF NOT EXISTS offer_items (
-                id BIGSERIAL PRIMARY KEY,
-                user_name TEXT NOT NULL,
-                name TEXT NOT NULL,
-                qty NUMERIC(12,2) NOT NULL DEFAULT 1,
-                price NUMERIC(12,2) NOT NULL DEFAULT 0,
-                line_total NUMERIC(12,2) NOT NULL DEFAULT 0,
-                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            create table if not exists offers (
+              id bigserial primary key,
+              user_name text not null,
+              client_name text,
+              created_at timestamptz not null default now()
             );
             """
         )
         conn.execute(
             """
-            CREATE INDEX IF NOT EXISTS idx_offer_items_user_name
-            ON offer_items(user_name);
+            create table if not exists offer_items (
+              id bigserial primary key,
+              offer_id bigint not null references offers(id) on delete cascade,
+              name text not null,
+              qty numeric(12,2) not null default 1,
+              price numeric(12,2) not null default 0,
+              line_total numeric(12,2) not null default 0
+            );
             """
         )
+        conn.execute("create index if not exists idx_offers_user_name on offers(user_name);")
+        conn.execute("create index if not exists idx_offer_items_offer_id on offer_items(offer_id);")
 
 
-def list_items(user: str):
+def create_offer(user: str, client_name: str | None = None) -> int:
     with get_conn() as conn:
-        cur = conn.execute(
-            """
-            SELECT id, name, qty, price, line_total
-            FROM offer_items
-            WHERE user_name = %s
-            ORDER BY id ASC
-            """,
-            (user,),
-        )
-        return cur.fetchall()
+        row = conn.execute(
+            "insert into offers(user_name, client_name) values (%s, %s) returning id",
+            (user, client_name),
+        ).fetchone()
+        return int(row["id"])
 
 
-def add_item(user: str, name: str, qty: float, price: float):
-    line_total = round(float(qty) * float(price), 2)
-    with get_conn() as conn:
-        conn.execute(
-            """
-            INSERT INTO offer_items (user_name, name, qty, price, line_total)
-            VALUES (%s, %s, %s, %s, %s)
-            """,
-            (user, name, qty, price, line_total),
-        )
-
-
-def clear_items(user: str):
+def add_item(offer_id: int, name: str, qty: float, price: float) -> None:
+    line_total = float(qty) * float(price)
     with get_conn() as conn:
         conn.execute(
-            "DELETE FROM offer_items WHERE user_name = %s",
-            (user,),
+            """
+            insert into offer_items(offer_id, name, qty, price, line_total)
+            values (%s, %s, %s, %s, %s)
+            """,
+            (offer_id, name, qty, price, line_total),
         )
+
+
+def list_items(offer_id: int):
+    with get_conn() as conn:
+        return conn.execute(
+            """
+            select id, name, qty, price, line_total
+            from offer_items
+            where offer_id=%s
+            order by id asc
+            """,
+            (offer_id,),
+        ).fetchall()
+
+
+def clear_items(offer_id: int) -> None:
+    with get_conn() as conn:
+        conn.execute("delete from offer_items where offer_id=%s", (offer_id,))
