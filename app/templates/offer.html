@@ -158,11 +158,13 @@
     </div>
     <div>
       <label>PDV</label>
-      <select name="vat_rate">
-        <option value="0" {% if (offer.get("vat_rate") or 0) == 0 %}selected{% endif %}>0%</option>
-        <option value="13" {% if (offer.get("vat_rate") or 0) == 13 %}selected{% endif %}>13%</option>
-        <option value="25" {% if (offer.get("vat_rate") or 0) == 25 %}selected{% endif %}>25%</option>
-      </select>
+      <form method="post" action="/offer/vat" style="margin:0;" class="{% if locked %}disabled{% endif %}">
+        <select name="vat_rate" onchange="this.form.submit()">
+          <option value="0" {% if (offer.get("vat_rate") or 0) == 0 %}selected{% endif %}>0%</option>
+          <option value="13" {% if (offer.get("vat_rate") or 0) == 13 %}selected{% endif %}>13%</option>
+          <option value="25" {% if (offer.get("vat_rate") or 0) == 25 %}selected{% endif %}>25%</option>
+        </select>
+      </form>
     </div>
 
     <div>
