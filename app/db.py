@@ -140,3 +140,12 @@ def list_items(offer_id: int):
 def clear_items(offer_id: int) -> None:
     with get_conn() as conn:
         conn.execute("delete from offer_items where offer_id=%s", (offer_id,))
+
+
+
+def delete_item(offer_id: int, item_id: int) -> None:
+    with get_conn() as conn:
+        conn.execute(
+            "delete from offer_items where offer_id=%s and id=%s",
+            (offer_id, item_id),
+        )
