@@ -121,11 +121,11 @@ def create_offer(user: str, client_name: str | None = None) -> int:
 
         row = conn.execute(
             """
-            insert into offers(user_name, client_name, offer_year, offer_seq, offer_no, status, vat_rate)
-            values (%s, %s, %s, %s, %s, %s, %s)
+            insert into offers(user_name, client_name, offer_year, offer_seq, offer_no, status)
+            values (%s, %s, %s, %s, %s, %s)
             returning id
             """,
-            (user, client_name, year, next_seq, offer_no, "DRAFT", 0),
+            (user, client_name, year, next_seq, offer_no, "DRAFT"),
         ).fetchone()
         return int(row["id"])
 
@@ -323,11 +323,4 @@ def accept_offer(user: str, offer_id: int) -> None:
         conn.execute(
             "update offers set status='ACCEPTED', accepted_at=now() where id=%s and user_name=%s",
             (offer_id, user),
-        )
-
-def update_offer_vat(user: str, offer_id: int, vat_rate: float) -> None:
-    with get_conn() as conn:
-        conn.execute(
-            "update offers set vat_rate=%s where id=%s and user_name=%s",
-            (vat_rate, offer_id, user),
         )
