@@ -30,7 +30,7 @@ from .db import (
     upsert_client,
     upsert_settings,
     get_settings,
-    update_offer_meta,    accept_offer,
+    update_offer_meta,    accept_offer,    update_offer_vat,
 )
 from .security import verify_credentials
 
@@ -310,6 +310,18 @@ def offer_meta(
         return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
 
 
+@app.post("/offer/vat")
+def offer_vat(request: Request, vat_rate: float = Form(0)):
+    user, resp = _require_user(request)
+    if resp:
+        return resp
+
+    offer_id = _get_or_create_offer_id(request)
+    update_offer_vat(user=user, offer_id=offer_id, vat_rate=float(vat_rate or 0))
+    return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
+
+
+
 @app.post("/offer/accept")
 def offer_accept(request: Request):
     user, resp = _require_user(request)
@@ -457,6 +469,7 @@ def offer_excel(request: Request):
 
 @app.get("/offer.pdf")
 def offer_pdf(request: Request):
+    # auto_set_sent_on_pdf
     user, resp = _require_user(request)
     if resp:
         return resp
@@ -466,7 +479,11 @@ def offer_pdf(request: Request):
     offer = dict(offer_row) if offer_row else {}
     items = list_items(offer_id)
 
-    
+    # Auto set status SENT when downloading PDF from DRAFT
+    if (offer.get("status") or "DRAFT") == "DRAFT":
+        update_offer_status(user=user, offer_id=offer_id, status="SENT")
+        offer["status"] = "SENT"
+
     _ensure_pdf_font()
     title_font = PDF_FONT_NAME if _pdf_font_ready else "Helvetica"
     body_font = PDF_FONT_NAME if _pdf_font_ready else "Helvetica"
