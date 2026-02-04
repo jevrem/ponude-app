@@ -90,6 +90,9 @@ def init_db() -> None:
         conn.execute("alter table offers add column if not exists note text;")
         conn.execute("alter table offers add column if not exists place text;")
         conn.execute("alter table offers add column if not exists signed_by text;")
+        conn.execute("alter table offers add column if not exists vat_rate double precision;")
+        conn.execute("alter table offers add column if not exists accepted_at timestamptz;")
+        conn.execute("update offers set vat_rate=0 where vat_rate is null;")
 
         conn.execute("update offers set status='DRAFT' where status is null;")
         try:
@@ -132,7 +135,7 @@ def get_offer(user: str, offer_id: int):
         return conn.execute(
             """
             select id, user_name, client_name, created_at, offer_no, offer_year, offer_seq, status,
-                   terms_delivery, terms_payment, note, place, signed_by
+                   terms_delivery, terms_payment, note, place, signed_by, vat_rate, accepted_at
             from offers
             where id=%s and user_name=%s
             """,
@@ -201,6 +204,8 @@ def list_offers(user: str, status: str | None = None):
               o.client_name,
               o.created_at,
               o.status,
+              o.vat_rate,
+              o.accepted_at,
               coalesce(sum(i.line_total), 0) as total
             from offers o
             left join offer_items i on i.offer_id = o.id
@@ -250,6 +255,7 @@ def update_offer_meta(
     note: str | None,
     place: str | None,
     signed_by: str | None,
+    vat_rate: float | None,
 ) -> None:
     with get_conn() as conn:
         conn.execute(
@@ -259,11 +265,13 @@ def update_offer_meta(
                 terms_payment=%s,
                 note=%s,
                 place=%s,
-                signed_by=%s
+                signed_by=%s,
+                vat_rate=%s
             where id=%s and user_name=%s
             """,
-            (terms_delivery, terms_payment, note, place, signed_by, offer_id, user),
+            (terms_delivery, terms_payment, note, place, signed_by, vat_rate, offer_id, user),
         )
+
 
 
 
@@ -308,4 +316,11 @@ def upsert_settings(
               updated_at=now()
             """,
             (user, company_name, company_address, company_oib, company_iban, company_email, company_phone, logo_path),
+        )
+
+def accept_offer(user: str, offer_id: int) -> None:
+    with get_conn() as conn:
+        conn.execute(
+            "update offers set status='ACCEPTED', accepted_at=now() where id=%s and user_name=%s",
+            (offer_id, user),
         )
