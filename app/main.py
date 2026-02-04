@@ -12,10 +12,7 @@ from openpyxl import Workbook
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
-from .security import verify_credentials, require_login, logout
-from .db import init_db, list_items, add_item, clear_items
-
-# Uvijek definiraj app na vrhu (Render/uvicorn traži app.main:app)
+# IMPORTANT: define app first so uvicorn can always find it
 app = FastAPI()
 templates = Jinja2Templates(directory="app/templates")
 
@@ -24,16 +21,55 @@ app.add_middleware(
     SessionMiddleware,
     secret_key=SECRET_KEY,
     same_site="lax",
-    https_only=False,  # kasnije može True kad si 100% na HTTPS + custom domain
+    https_only=False,
 )
+
+_db_import_error = None
+_security_import_error = None
+
+try:
+    from .db import init_db, create_offer, list_items, add_item, clear_items
+except Exception as e:
+    _db_import_error = e
+
+try:
+    from .security import verify_credentials, require_login, logout
+except Exception as e:
+    _security_import_error = e
+
 
 @app.on_event("startup")
 def _startup():
+    if _security_import_error:
+        raise RuntimeError(f"security import failed: {_security_import_error}")
+    if _db_import_error:
+        raise RuntimeError(f"db import failed: {_db_import_error}")
     init_db()
+
 
 @app.get("/health")
 def health():
     return {"ok": True}
+
+
+def _get_or_create_offer_id(request: Request) -> int:
+    user = request.session.get("user")
+    if not user:
+        raise RuntimeError("User not in session")
+
+    offer_id = request.session.get("offer_id")
+    try:
+        offer_id_int = int(offer_id) if offer_id is not None else None
+    except Exception:
+        offer_id_int = None
+
+    if not offer_id_int:
+        offer_id_int = create_offer(user=user)
+        request.session["offer_id"] = offer_id_int
+
+    return offer_id_int
+
+
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
@@ -42,37 +78,44 @@ def index(request: Request):
         return RedirectResponse(url="/login", status_code=HTTP_303_SEE_OTHER)
     return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
 
+
 @app.get("/login", response_class=HTMLResponse)
 def login_form(request: Request):
     if request.session.get("user"):
         return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
     return templates.TemplateResponse("login.html", {"request": request, "error": None})
 
+
 @app.post("/login", response_class=HTMLResponse)
 def login(request: Request, username: str = Form(...), password: str = Form(...)):
     if verify_credentials(username, password):
         request.session["user"] = username
+        request.session.pop("offer_id", None)
         return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
     return templates.TemplateResponse(
         "login.html",
         {"request": request, "error": "Pogrešan user ili lozinka."},
     )
 
+
 @app.post("/logout")
 def do_logout(request: Request):
     logout(request)
     return RedirectResponse(url="/login", status_code=HTTP_303_SEE_OTHER)
 
+
 @app.get("/offer", response_class=HTMLResponse)
 def offer_page(request: Request):
     require_login(request)
     user = request.session.get("user")
-    items = list_items(user)
+    offer_id = _get_or_create_offer_id(request)
+    items = list_items(offer_id)
     subtotal = sum(float(i["line_total"]) for i in items) if items else 0.0
     return templates.TemplateResponse(
         "offer.html",
         {"request": request, "user": user, "items": items, "subtotal": subtotal},
     )
+
 
 @app.post("/offer/add")
 def offer_add(
@@ -82,24 +125,38 @@ def offer_add(
     price: float = Form(0),
 ):
     require_login(request)
-    user = request.session.get("user")
+    offer_id = _get_or_create_offer_id(request)
     name = (name or "").strip()
     if name:
-        add_item(user=user, name=name, qty=float(qty), price=float(price))
+        add_item(offer_id=offer_id, name=name, qty=float(qty), price=float(price))
     return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
+
 
 @app.post("/offer/clear")
 def offer_clear(request: Request):
     require_login(request)
-    user = request.session.get("user")
-    clear_items(user)
+    offer_id = _get_or_create_offer_id(request)
+    clear_items(offer_id)
     return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
+
+
+@app.post("/offer/new")
+def offer_new(request: Request):
+    require_login(request)
+    user = request.session.get("user")
+    request.session.pop("offer_id", None)
+    offer_id = create_offer(user=user)
+    request.session["offer_id"] = offer_id
+    return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
+
+
 
 @app.get("/offer.xlsx")
 def offer_excel(request: Request):
     require_login(request)
     user = request.session.get("user")
-    items = list_items(user)
+    offer_id = _get_or_create_offer_id(request)
+    items = list_items(offer_id)
 
     wb = Workbook()
     ws = wb.active
@@ -129,11 +186,13 @@ def offer_excel(request: Request):
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
+
 @app.get("/offer.pdf")
 def offer_pdf(request: Request):
     require_login(request)
     user = request.session.get("user")
-    items = list_items(user)
+    offer_id = _get_or_create_offer_id(request)
+    items = list_items(offer_id)
 
     bio = BytesIO()
     c = canvas.Canvas(bio, pagesize=A4)
@@ -160,8 +219,8 @@ def offer_pdf(request: Request):
     y -= 18
 
     c.setFont("Helvetica", 10)
-    subtotal = 0.0
 
+    subtotal = 0.0
     for it in items:
         name = it["name"]
         qty = float(it["qty"])
