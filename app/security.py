@@ -77,7 +77,7 @@ def verify_credentials(username: str, password: str) -> bool:
 
 
 def require_login(request: Request) -> str:
-    """Raise a proper redirect as an HTTPException (303)."""
+    """Require logged-in session; redirect to /login using 303."""
     user = request.session.get("user")
     if not user:
         raise StarletteHTTPException(
@@ -85,4 +85,13 @@ def require_login(request: Request) -> str:
             detail="Not authenticated",
             headers={"Location": "/login"},
         )
-    return user
+    return str(user)
+
+
+def logout(request: Request) -> None:
+    """Clear session."""
+    try:
+        request.session.clear()
+    except Exception:
+        # very defensive; sessions middleware should always provide dict-like session
+        request.session["user"] = None
