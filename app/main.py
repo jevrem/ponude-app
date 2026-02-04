@@ -12,7 +12,10 @@ from openpyxl import Workbook
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
-# IMPORTANT: define app first so uvicorn can always find it
+from .security import verify_credentials, require_login, logout
+from .db import init_db, list_items, add_item, clear_items
+
+# Uvijek definiraj app na vrhu (Render/uvicorn traži app.main:app)
 app = FastAPI()
 templates = Jinja2Templates(directory="app/templates")
 
@@ -21,36 +24,16 @@ app.add_middleware(
     SessionMiddleware,
     secret_key=SECRET_KEY,
     same_site="lax",
-    https_only=False,
+    https_only=False,  # kasnije može True kad si 100% na HTTPS + custom domain
 )
-
-_db_import_error = None
-_security_import_error = None
-
-try:
-    from .db import init_db, list_items, add_item, clear_items
-except Exception as e:
-    _db_import_error = e
-
-try:
-    from .security import verify_credentials, require_login, logout
-except Exception as e:
-    _security_import_error = e
-
 
 @app.on_event("startup")
 def _startup():
-    if _security_import_error:
-        raise RuntimeError(f"security import failed: {_security_import_error}")
-    if _db_import_error:
-        raise RuntimeError(f"db import failed: {_db_import_error}")
     init_db()
-
 
 @app.get("/health")
 def health():
     return {"ok": True}
-
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
@@ -59,13 +42,11 @@ def index(request: Request):
         return RedirectResponse(url="/login", status_code=HTTP_303_SEE_OTHER)
     return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
 
-
 @app.get("/login", response_class=HTMLResponse)
 def login_form(request: Request):
     if request.session.get("user"):
         return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
     return templates.TemplateResponse("login.html", {"request": request, "error": None})
-
 
 @app.post("/login", response_class=HTMLResponse)
 def login(request: Request, username: str = Form(...), password: str = Form(...)):
@@ -77,12 +58,10 @@ def login(request: Request, username: str = Form(...), password: str = Form(...)
         {"request": request, "error": "Pogrešan user ili lozinka."},
     )
 
-
 @app.post("/logout")
 def do_logout(request: Request):
     logout(request)
     return RedirectResponse(url="/login", status_code=HTTP_303_SEE_OTHER)
-
 
 @app.get("/offer", response_class=HTMLResponse)
 def offer_page(request: Request):
@@ -94,7 +73,6 @@ def offer_page(request: Request):
         "offer.html",
         {"request": request, "user": user, "items": items, "subtotal": subtotal},
     )
-
 
 @app.post("/offer/add")
 def offer_add(
@@ -110,14 +88,12 @@ def offer_add(
         add_item(user=user, name=name, qty=float(qty), price=float(price))
     return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
 
-
 @app.post("/offer/clear")
 def offer_clear(request: Request):
     require_login(request)
     user = request.session.get("user")
     clear_items(user)
     return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
-
 
 @app.get("/offer.xlsx")
 def offer_excel(request: Request):
@@ -153,7 +129,6 @@ def offer_excel(request: Request):
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
-
 @app.get("/offer.pdf")
 def offer_pdf(request: Request):
     require_login(request)
@@ -185,8 +160,8 @@ def offer_pdf(request: Request):
     y -= 18
 
     c.setFont("Helvetica", 10)
-
     subtotal = 0.0
+
     for it in items:
         name = it["name"]
         qty = float(it["qty"])
