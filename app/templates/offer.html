@@ -82,6 +82,8 @@
 
   <a href="/offers"><button class="btn" type="button">Sve ponude</button></a>
 
+  <a href="/settings"><button class="btn" type="button">Postavke firme</button></a>
+
   <a href="/offer.xlsx"><button class="btn" type="button">Download Excel</button></a>
   <a href="/offer.pdf"><button class="btn" type="button">Download PDF</button></a>
 
@@ -121,6 +123,39 @@
     <div class="muted" style="margin-top:6px;">SENT/ACCEPTED zaključava ponudu.</div>
   </form>
 </div>
+
+
+</div>
+
+<div class="spacer"></div>
+
+<form method="post" action="/offer/meta" style="margin:0;" class="{% if locked %}disabled{% endif %}">
+  <div class="grid" style="grid-template-columns: 1fr 1fr;">
+    <div>
+      <label>Mjesto</label>
+      <input name="place" value="{{ offer.get('place') or '' }}" placeholder="npr. Velika Gorica" />
+    </div>
+    <div>
+      <label>Potpis (ime i prezime)</label>
+      <input name="signed_by" value="{{ offer.get('signed_by') or '' }}" placeholder="npr. Marko Makaj" />
+    </div>
+    <div>
+      <label>Rok isporuke</label>
+      <input name="terms_delivery" value="{{ offer.get('terms_delivery') or '' }}" placeholder="npr. 21 dan" />
+    </div>
+    <div>
+      <label>Rok plaćanja</label>
+      <input name="terms_payment" value="{{ offer.get('terms_payment') or '' }}" placeholder="npr. 50% avans, ostatak po isporuci" />
+    </div>
+    <div style="grid-column: 1 / -1;">
+      <label>Napomena</label>
+      <input name="note" value="{{ offer.get('note') or '' }}" placeholder="npr. Ponuda vrijedi 7 dana." />
+    </div>
+    <div style="grid-column: 1 / -1; display:flex; justify-content:flex-end; gap:10px;">
+      <button class="btn btn-primary" type="submit">Spremi detalje za PDF</button>
+    </div>
+  </div>
+</form>
 
 <div class="spacer"></div>
 
