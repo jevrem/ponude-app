@@ -68,6 +68,14 @@ def init_db():
         conn.execute("alter table offers add column if not exists offer_year int;")
         conn.execute("alter table offers add column if not exists offer_seq int;")
         conn.execute("alter table offers add column if not exists offer_no text;")
+        conn.execute("alter table offers add column if not exists status text;")
+        conn.execute("update offers set status='DRAFT' where status is null;")
+        conn.execute("alter table offers alter column status set default 'DRAFT';")
+        # If column exists but was nullable, enforce NOT NULL after backfill
+        try:
+            conn.execute("alter table offers alter column status set not null;")
+        except Exception:
+            pass
         conn.execute(
             """
             create table if not exists offer_items (
@@ -79,6 +87,16 @@ def init_db():
               line_total numeric(12,2) not null default 0
             );
             """
+        )
+        conn.execute(
+            \"\"\"
+            create table if not exists clients (
+              id bigserial primary key,
+              user_name text not null,
+              name text not null,
+              created_at timestamptz not null default now()
+            );
+            \"\"\"
         )
         conn.execute("create index if not exists idx_offers_user_name on offers(user_name);")
         conn.execute("create index if not exists idx_offers_user_year_seq on offers(user_name, offer_year, offer_seq);")
@@ -99,11 +117,11 @@ def init_db():
 
         row = conn.execute(
             """
-            insert into offers(user_name, client_name, offer_year, offer_seq, offer_no)
-            values (%s, %s, %s, %s, %s)
+            insert into offers(user_name, client_name, offer_year, offer_seq, offer_no, status)
+            values (%s, %s, %s, %s, %s, %s)
             returning id
             """,
-            (user, client_name, year, next_seq, offer_no),
+            (user, client_name, year, next_seq, offer_no, 'DRAFT'),
         ).fetchone()
         return int(row["id"])
         return int(row["id"])
@@ -140,8 +158,8 @@ def clear_items(offer_id: int) -> None:
 
 
 
-def list_offers(user: str):
-    """List offers for a user with totals."""
+def list_offers(user: str, status: str | None = None):
+    """List offers for a user with totals. Optionally filter by status."""
     with get_conn() as conn:
         return conn.execute(
             """
@@ -150,12 +168,53 @@ def list_offers(user: str):
               o.offer_no,
               o.client_name,
               o.created_at,
+              o.status,
               coalesce(sum(i.line_total), 0) as total
             from offers o
             left join offer_items i on i.offer_id = o.id
             where o.user_name = %s
-            group by o.id, o.offer_no, o.client_name, o.created_at
+              and (%s is null or o.status = %s)
+            group by o.id, o.offer_no, o.client_name, o.created_at, o.status
             order by o.created_at desc, o.id desc
+            """,
+            (user, status, status),
+        ).fetchall()
+
+
+
+def update_offer_status(user: str, offer_id: int, status: str) -> None:
+    with get_conn() as conn:
+        conn.execute(
+            "update offers set status=%s where id=%s and user_name=%s",
+            (status, offer_id, user),
+        )
+
+
+
+def list_clients(user: str):
+    with get_conn() as conn:
+        return conn.execute(
+            """
+            select name
+            from clients
+            where user_name=%s
+            order by name asc
             """,
             (user,),
         ).fetchall()
+
+
+
+def upsert_client(user: str, name: str) -> None:
+    name = (name or "").strip()
+    if not name:
+        return
+    with get_conn() as conn:
+        conn.execute(
+            """
+            insert into clients(user_name, name)
+            values (%s, %s)
+            on conflict do nothing
+            """,
+            (user, name),
+        )
