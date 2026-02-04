@@ -37,6 +37,7 @@ try:
         add_item,
         clear_items,
         delete_item,
+        list_offers,
     )
 except Exception as e:
     _db_import_error = e
@@ -99,6 +100,36 @@ def index(request: Request):
         return resp
     return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
 
+
+
+@app.get("/offers", response_class=HTMLResponse)
+def offers_page(request: Request):
+    user, resp = _require_user(request)
+    if resp:
+        return resp
+
+    rows = list_offers(user)
+    # Ensure plain dicts for template safety
+    offers = [dict(r) for r in rows] if rows else []
+
+    return templates.TemplateResponse(
+        "offers.html",
+        {"request": request, "user": user, "offers": offers},
+    )
+
+
+@app.post("/offers/open/{offer_id}")
+def offers_open(request: Request, offer_id: int):
+    user, resp = _require_user(request)
+    if resp:
+        return resp
+
+    offer_row = get_offer(user=user, offer_id=int(offer_id))
+    if not offer_row:
+        return RedirectResponse(url="/offers", status_code=HTTP_303_SEE_OTHER)
+
+    request.session["offer_id"] = int(offer_id)
+    return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
 
 @app.get("/login", response_class=HTMLResponse)
 def login_form(request: Request):
