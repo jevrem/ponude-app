@@ -1,301 +1,322 @@
+from __future__ import annotations
+
 import os
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
+from typing import Optional
+
 from fastapi import FastAPI, Request, Form
-from fastapi.responses import HTMLResponse, RedirectResponse, Response, JSONResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, Response
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.status import HTTP_303_SEE_OTHER
 
-from app.security import require_login, verify_credentials, logout
-from app.db import (
-    init_db,
-    create_offer,
-    get_offer,
-    update_offer_client_name,
-    update_offer_status,
-    update_offer_meta,
-    accept_offer,
-    add_item,
-    list_items,
-    delete_item,
-    clear_items,
-    list_offers,
-    get_settings,
-    upsert_settings,
-)
+from app import db
+from app.security import authenticate, logout
 
-BASE_DIR = os.path.dirname(__file__)
-TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
-templates = Jinja2Templates(directory=TEMPLATES_DIR)
+APP_DIR = os.path.dirname(__file__)
+TEMPLATES_DIR = os.path.join(APP_DIR, "templates")
 
 app = FastAPI()
+templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
-SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-change-me")
-app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
+# Session cookie (production: set SECRET_KEY in Render env vars)
+SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-change-me")
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=SECRET_KEY,
+    same_site="lax",
+    https_only=True,
+    max_age=60 * 60 * 24 * 30,  # 30 days
+)
+
+
+def _user(request: Request) -> Optional[str]:
+    return request.session.get("user")
+
+
+def _require_login(request: Request) -> Optional[RedirectResponse]:
+    if not _user(request):
+        return RedirectResponse(url="/login", status_code=HTTP_303_SEE_OTHER)
+    return None
+
+
+def _to_decimal(x: str, default: Decimal = Decimal("0")) -> Decimal:
+    try:
+        x = (x or "").replace(",", ".").strip()
+        if x == "":
+            return default
+        return Decimal(x)
+    except (InvalidOperation, ValueError):
+        return default
 
 
 @app.on_event("startup")
 def _startup() -> None:
-    init_db()
+    db.init_db()
 
 
-def _current_offer_id(request: Request, user: str) -> int:
-    offer_id = request.session.get("offer_id")
-    if isinstance(offer_id, int) and offer_id > 0:
-        # Ensure it belongs to user; if not, create a fresh one.
-        o = get_offer(offer_id, user)
-        if o:
-            return offer_id
-
-    offer_id = create_offer(user)
-    request.session["offer_id"] = int(offer_id)
-    return int(offer_id)
+@app.get("/", include_in_schema=False)
+def root(request: Request):
+    if _user(request):
+        return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
+    return RedirectResponse(url="/login", status_code=HTTP_303_SEE_OTHER)
 
 
-def _offer_context(request: Request, user: str) -> dict:
-    offer_id = _current_offer_id(request, user)
-    offer = get_offer(offer_id, user) or {}
-    items = list_items(offer_id)
-    subtotal = sum(float(i.get("line_total") or 0) for i in items) if items else 0.0
-    vat_rate = float(offer.get("vat_rate") or 0)
-    vat_amount = subtotal * (vat_rate / 100.0)
-    total = subtotal + vat_amount
-    settings = get_settings(user) or {}
-    locked = (offer.get("status") == "ACCEPTED")  # ONLY ACCEPTED locks edits
-
-    return {
-        "offer_id": offer_id,
-        "offer": offer,
-        "items": items,
-        "subtotal": subtotal,
-        "vat_rate": vat_rate,
-        "vat_amount": vat_amount,
-        "total": total,
-        "settings": settings,
-        "locked": locked,
-    }
+@app.get("/__routes", include_in_schema=False)
+def routes_dump():
+    # Simple debug helper: list all routes
+    routes = []
+    for r in app.router.routes:
+        methods = getattr(r, "methods", None)
+        routes.append({"path": getattr(r, "path", str(r)), "methods": sorted(list(methods)) if methods else None})
+    return JSONResponse(routes)
 
 
-@app.get("/", response_class=HTMLResponse)
-def root(_: Request):
-    return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
-
+# ---------------------------
+# AUTH
+# ---------------------------
 
 @app.get("/login", response_class=HTMLResponse)
-def login_page(request: Request):
-    return templates.TemplateResponse("login.html", {"request": request, "error": None})
+def login_page(request: Request, error: str | None = None):
+    # Minimal built-in template to avoid missing file issues
+    html = f"""
+    <html><head><meta charset="utf-8"><title>Login</title></head>
+    <body style="font-family:Arial;max-width:420px;margin:40px auto;">
+      <h2>Ponude – prijava</h2>
+      {'<div style="color:#b00;font-weight:bold">Pogrešan user ili lozinka.</div>' if error else ''}
+      <form method="post" action="/login">
+        <label>Username</label><br>
+        <input name="username" style="width:100%;padding:10px" /><br><br>
+        <label>Lozinka</label><br>
+        <input type="password" name="password" style="width:100%;padding:10px" /><br><br>
+        <button type="submit" style="width:100%;padding:12px;font-weight:bold">Prijavi se</button>
+      </form>
+      <div style="margin-top:10px;color:#666;font-size:12px">
+        Postavi USER1/2 vars u Render Environment Variables.
+      </div>
+    </body></html>
+    """
+    return HTMLResponse(html)
 
 
 @app.post("/login")
-def do_login(
+def login_post(
     request: Request,
     username: str = Form(...),
     password: str = Form(...),
 ):
-    username = (username or "").strip()
-    password = (password or "").strip()
-
-    if verify_credentials(username, password):
-        request.session.clear()
-        request.session["user"] = username
+    if authenticate(username, password):
+        request.session["user"] = username.strip().lower()
+        # create or fetch active offer
+        offer_id = db.ensure_active_offer(request.session["user"])
+        request.session["offer_id"] = offer_id
         return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
-
-    return templates.TemplateResponse(
-        "login.html",
-        {"request": request, "error": "Pogrešan user ili lozinka."},
-    )
+    return RedirectResponse(url="/login?error=1", status_code=HTTP_303_SEE_OTHER)
 
 
 @app.post("/logout")
-def do_logout(request: Request):
-    logout(request)
-    return RedirectResponse(url="/login", status_code=HTTP_303_SEE_OTHER)
+def logout_post(request: Request):
+    return logout(request)
 
+
+# ---------------------------
+# OFFER
+# ---------------------------
 
 @app.get("/offer", response_class=HTMLResponse)
 def offer_page(request: Request):
-    user = require_login(request)
-    ctx = _offer_context(request, user)
-    return templates.TemplateResponse(
-        "offer.html",
-        {"request": request, "user": user, **ctx},
-    )
+    redir = _require_login(request)
+    if redir:
+        return redir
+
+    user = _user(request)
+    offer_id = request.session.get("offer_id") or db.ensure_active_offer(user)
+    request.session["offer_id"] = offer_id
+
+    offer = db.get_offer(offer_id)
+    items = db.list_items(offer_id)
+
+    totals = db.compute_totals(items, vat_rate=Decimal(str(offer.get("vat_rate") or 0)))
+    ctx = {
+        "request": request,
+        "user": user,
+        "offer": offer,
+        "items": items,
+        "totals": totals,
+    }
+    return templates.TemplateResponse("offer.html", ctx)
 
 
 @app.post("/offer/new")
 def offer_new(request: Request):
-    user = require_login(request)
-    offer_id = create_offer(user)
-    request.session["offer_id"] = int(offer_id)
+    redir = _require_login(request)
+    if redir:
+        return redir
+    user = _user(request)
+    offer_id = db.create_offer(user)
+    request.session["offer_id"] = offer_id
     return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
 
 
-@app.post("/offer/select")
-def offer_select(request: Request, offer_id: int = Form(...)):
-    user = require_login(request)
-    # only allow selecting own offers
-    if get_offer(int(offer_id), user):
-        request.session["offer_id"] = int(offer_id)
+@app.post("/offer/item/add")
+def offer_item_add(
+    request: Request,
+    name: str = Form(""),
+    qty: str = Form("1"),
+    price: str = Form("0"),
+):
+    redir = _require_login(request)
+    if redir:
+        return redir
+    user = _user(request)
+    offer_id = request.session.get("offer_id") or db.ensure_active_offer(user)
+    request.session["offer_id"] = offer_id
+
+    offer = db.get_offer(offer_id)
+    # Only lock on ACCEPTED (SENT can still be edited)
+    if (offer.get("status") or "DRAFT").upper() == "ACCEPTED":
+        return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
+
+    db.add_item(
+        offer_id=offer_id,
+        name=(name or "").strip(),
+        qty=_to_decimal(qty, Decimal("1")),
+        price=_to_decimal(price, Decimal("0")),
+    )
+    return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
+
+
+@app.post("/offer/item/delete")
+def offer_item_delete(request: Request, item_id: int = Form(...)):
+    redir = _require_login(request)
+    if redir:
+        return redir
+    offer_id = request.session.get("offer_id")
+    if offer_id:
+        offer = db.get_offer(offer_id)
+        if (offer.get("status") or "DRAFT").upper() != "ACCEPTED":
+            db.delete_item(offer_id, int(item_id))
+    return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
+
+
+@app.post("/offer/items/clear")
+def offer_items_clear(request: Request):
+    redir = _require_login(request)
+    if redir:
+        return redir
+    offer_id = request.session.get("offer_id")
+    if offer_id:
+        offer = db.get_offer(offer_id)
+        if (offer.get("status") or "DRAFT").upper() != "ACCEPTED":
+            db.clear_items(offer_id)
     return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
 
 
 @app.post("/offer/client")
-def offer_client(request: Request, client_name: str = Form("")):
-    user = require_login(request)
-    ctx = _offer_context(request, user)
-    if ctx["locked"]:
-        return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
-
-    update_offer_client_name(ctx["offer_id"], user, (client_name or "").strip())
+def offer_client_save(request: Request, client_name: str = Form("")):
+    redir = _require_login(request)
+    if redir:
+        return redir
+    offer_id = request.session.get("offer_id")
+    if offer_id:
+        offer = db.get_offer(offer_id)
+        if (offer.get("status") or "DRAFT").upper() != "ACCEPTED":
+            db.set_client_name(offer_id, client_name.strip() or None)
     return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
 
 
 @app.post("/offer/status")
-def offer_status(request: Request, status: str = Form("DRAFT")):
-    user = require_login(request)
-    ctx = _offer_context(request, user)
-    # Only ACCEPTED is final; don't auto-lock on SENT.
-    status = (status or "DRAFT").strip().upper()
-    if status not in ("DRAFT", "SENT", "ACCEPTED", "REJECTED"):
-        status = "DRAFT"
-
-    # If already accepted, ignore.
-    if (ctx["offer"].get("status") == "ACCEPTED"):
-        return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
-
-    update_offer_status(ctx["offer_id"], user, status)
+def offer_status_save(request: Request, status: str = Form("DRAFT")):
+    redir = _require_login(request)
+    if redir:
+        return redir
+    offer_id = request.session.get("offer_id")
+    if offer_id:
+        # Do NOT auto-switch status anywhere else. Only here or accept.
+        db.set_status(offer_id, (status or "DRAFT").strip().upper())
     return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
 
 
 @app.post("/offer/accept")
 def offer_accept(request: Request):
-    user = require_login(request)
-    ctx = _offer_context(request, user)
-    # "Prihvati ponudu" sets ACCEPTED and locks it.
-    accept_offer(ctx["offer_id"], user)
+    redir = _require_login(request)
+    if redir:
+        return redir
+    offer_id = request.session.get("offer_id")
+    if offer_id:
+        db.set_status(offer_id, "ACCEPTED")
     return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
 
 
 @app.post("/offer/meta")
-def offer_meta(
+def offer_meta_save(
     request: Request,
     place: str = Form(""),
-    sign_name: str = Form(""),
+    signed_by: str = Form(""),
     delivery_term: str = Form(""),
     payment_term: str = Form(""),
     note: str = Form(""),
-    vat_rate: float = Form(0),
+    vat_rate: str = Form("0"),
 ):
-    user = require_login(request)
-    ctx = _offer_context(request, user)
-    if ctx["locked"]:
-        return JSONResponse({"ok": False, "error": "locked"})
-
-    update_offer_meta(
-        offer_id=ctx["offer_id"],
-        user=user,
-        place=(place or "").strip(),
-        sign_name=(sign_name or "").strip(),
-        delivery_term=(delivery_term or "").strip(),
-        payment_term=(payment_term or "").strip(),
-        note=(note or "").strip(),
-        vat_rate=float(vat_rate or 0),
-    )
-    # Return JSON so the button can be used with fetch/htmx without redirect.
+    redir = _require_login(request)
+    if redir:
+        return redir
+    offer_id = request.session.get("offer_id")
+    if offer_id:
+        offer = db.get_offer(offer_id)
+        if (offer.get("status") or "DRAFT").upper() != "ACCEPTED":
+            db.set_meta(
+                offer_id=offer_id,
+                place=place.strip() or None,
+                signed_by=signed_by.strip() or None,
+                delivery_term=delivery_term.strip() or None,
+                payment_term=payment_term.strip() or None,
+                note=note.strip() or None,
+                vat_rate=int((_to_decimal(vat_rate, Decimal("0")))),
+            )
+    # Return JSON so the browser doesn't land on /offer/meta (and show 404)
     return JSONResponse({"ok": True})
 
 
-@app.get("/offer/meta")
-def offer_meta_get(request: Request):
-    user = require_login(request)
-    ctx = _offer_context(request, user)
-    o = ctx["offer"] or {}
-    return JSONResponse(
-        {
-            "offer_id": ctx["offer_id"],
-            "offer_no": o.get("offer_no"),
-            "status": o.get("status"),
-            "client_name": o.get("client_name"),
-            "place": o.get("place"),
-            "sign_name": o.get("sign_name"),
-            "delivery_term": o.get("delivery_term"),
-            "payment_term": o.get("payment_term"),
-            "note": o.get("note"),
-            "vat_rate": o.get("vat_rate"),
-        }
-    )
-
-
-@app.post("/offer/add")
-def offer_add(
-    request: Request,
-    name: str = Form(...),
-    qty: float = Form(1),
-    price: float = Form(0),
-):
-    user = require_login(request)
-    ctx = _offer_context(request, user)
-    if ctx["locked"]:
-        return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
-
-    name = (name or "").strip()
-    if name:
-        add_item(ctx["offer_id"], name=name, qty=float(qty or 0), price=float(price or 0))
-    return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
-
-
-@app.post("/offer/delete")
-def offer_delete(
-    request: Request,
-    item_id: int = Form(...),
-):
-    user = require_login(request)
-    ctx = _offer_context(request, user)
-    if ctx["locked"]:
-        return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
-
-    delete_item(ctx["offer_id"], int(item_id))
-    return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
-
-
-@app.post("/offer/clear")
-def offer_clear(request: Request):
-    user = require_login(request)
-    ctx = _offer_context(request, user)
-    if ctx["locked"]:
-        return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
-
-    clear_items(ctx["offer_id"])
-    return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
-
+# ---------------------------
+# LIST OFFERS
+# ---------------------------
 
 @app.get("/offers", response_class=HTMLResponse)
-def offers_page(request: Request, status: str | None = None):
-    user = require_login(request)
-    status_filter = (status or "").strip().upper() or None
-    if status_filter not in (None, "DRAFT", "SENT", "ACCEPTED", "REJECTED"):
-        status_filter = None
-
-    offers = list_offers(user, status_filter)
-    return templates.TemplateResponse(
-        "offers.html",
-        {"request": request, "user": user, "offers": offers, "status_filter": status_filter},
-    )
+def offers_page(request: Request):
+    redir = _require_login(request)
+    if redir:
+        return redir
+    user = _user(request)
+    offers = db.list_offers(user)
+    return templates.TemplateResponse("offers.html", {"request": request, "user": user, "offers": offers})
 
 
 @app.post("/offers/open")
 def offers_open(request: Request, offer_id: int = Form(...)):
-    user = require_login(request)
-    if get_offer(int(offer_id), user):
-        request.session["offer_id"] = int(offer_id)
+    redir = _require_login(request)
+    if redir:
+        return redir
+    request.session["offer_id"] = int(offer_id)
     return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
 
 
+# ---------------------------
+# SETTINGS
+# ---------------------------
+
 @app.get("/settings", response_class=HTMLResponse)
-def settings_page(request: Request):
-    user = require_login(request)
-    s = get_settings(user) or {}
-    return templates.TemplateResponse("settings.html", {"request": request, "user": user, "s": s, "ok": None})
+def settings_page(request: Request, ok: int = 0):
+    redir = _require_login(request)
+    if redir:
+        return redir
+    user = _user(request)
+    settings = db.get_settings(user)
+    return templates.TemplateResponse(
+        "settings.html",
+        {"request": request, "user": user, "settings": settings, "ok": bool(ok)},
+    )
 
 
 @app.post("/settings")
@@ -304,23 +325,23 @@ def settings_save(
     company_name: str = Form(""),
     company_address: str = Form(""),
     company_oib: str = Form(""),
-    company_phone: str = Form(""),
+    company_iban: str = Form(""),
     company_email: str = Form(""),
+    company_phone: str = Form(""),
+    logo_path: str = Form(""),
 ):
-    user = require_login(request)
-    upsert_settings(
+    redir = _require_login(request)
+    if redir:
+        return redir
+    user = _user(request)
+    db.save_settings(
         user=user,
-        company_name=(company_name or "").strip(),
-        company_address=(company_address or "").strip(),
-        company_oib=(company_oib or "").strip(),
-        company_phone=(company_phone or "").strip(),
-        company_email=(company_email or "").strip(),
+        company_name=company_name.strip() or None,
+        company_address=company_address.strip() or None,
+        company_oib=company_oib.strip() or None,
+        company_iban=company_iban.strip() or None,
+        company_email=company_email.strip() or None,
+        company_phone=company_phone.strip() or None,
+        logo_path=logo_path.strip() or None,
     )
-    s = get_settings(user) or {}
-    return templates.TemplateResponse("settings.html", {"request": request, "user": user, "s": s, "ok": True})
-
-
-@app.get("/__routes")
-def __routes():
-    # Helps debugging on Render when you think a route is missing.
-    return JSONResponse(sorted([f"{r.path} [{','.join(r.methods or [])}]" for r in app.router.routes]))
+    return RedirectResponse(url="/settings?ok=1", status_code=HTTP_303_SEE_OTHER)
