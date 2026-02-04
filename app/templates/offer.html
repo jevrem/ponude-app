@@ -54,7 +54,7 @@
     <h1>Ponuda</h1>
     <div class="muted">Prijavljen: {{ user }}</div>
     <div class="badge">
-      Aktivna ponuda #{{ request.session.get("offer_id") }}
+      Aktivna ponuda {{ offer.get("offer_no") or ("#" ~ request.session.get("offer_id")) }}
       {% if offer.get("created_at") %}
         • {{ offer.get("created_at").strftime('%d.%m.%Y %H:%M') }}
       {% endif %}
