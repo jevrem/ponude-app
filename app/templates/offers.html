@@ -1,84 +1,62 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="hr">
 <head>
-  <meta charset="UTF-8" />
-  <title>Ponude</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sve ponude</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 24px; }
-    h1 { margin: 0 0 6px 0; }
-    .topbar { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; }
+    body { font-family: Arial, sans-serif; padding: 18px 22px; }
     .muted { color:#666; font-size:13px; }
-    .actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top: 10px; }
-    .btn { border:1px solid #ccc; background:#f7f7f7; padding:8px 12px; cursor:pointer; }
-    table { width:100%; border-collapse:collapse; margin-top: 14px; }
-    th, td { border:1px solid #ddd; padding:10px; text-align:left; }
+    table { border-collapse: collapse; width: 100%; margin-top: 12px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align:left; }
     th { background:#f5f5f5; }
+    .actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin: 10px 0; }
+    .btn { border:1px solid #ccc; background:#f7f7f7; padding:8px 12px; cursor:pointer; }
+    .btn-primary { border:1px solid #333; background:#eaeaea; font-weight:bold; }
     .right { text-align:right; }
-    .pill { display:inline-block; padding:2px 8px; border:1px solid #ddd; border-radius:999px; background:#fafafa; font-size:12px; }
   </style>
 </head>
 <body>
-  <div class="topbar">
-    <div>
-      <h1>Ponude</h1>
-      <div class="muted">Prijavljen: {{ user }}</div>
-    </div>
-    <div class="actions">
-      <a class="btn" href="/offer" style="text-decoration:none;">Nazad na ponudu</a>
-      <a class="btn" href="/settings" style="text-decoration:none;">Postavke firme</a>
-      <form method="post" action="/logout" style="margin:0;"><button class="btn" type="submit">Odjava</button></form>
-    </div>
-  </div>
+  <h1>Sve ponude</h1>
+  <div class="muted">Prijavljen: {{ user }}</div>
 
   <div class="actions">
-    <span class="muted">Filter:</span>
-    <a class="btn" href="/offers" style="text-decoration:none; {% if not status_filter %}font-weight:bold;{% endif %}">Sve</a>
-    <a class="btn" href="/offers?status=DRAFT" style="text-decoration:none; {% if status_filter == 'DRAFT' %}font-weight:bold;{% endif %}">DRAFT</a>
-    <a class="btn" href="/offers?status=SENT" style="text-decoration:none; {% if status_filter == 'SENT' %}font-weight:bold;{% endif %}">SENT</a>
-    <a class="btn" href="/offers?status=ACCEPTED" style="text-decoration:none; {% if status_filter == 'ACCEPTED' %}font-weight:bold;{% endif %}">ACCEPTED</a>
-    <a class="btn" href="/offers?status=REJECTED" style="text-decoration:none; {% if status_filter == 'REJECTED' %}font-weight:bold;{% endif %}">REJECTED</a>
+    <a href="/offer"><button class="btn" type="button">Nazad na ponudu</button></a>
+    <a href="/settings"><button class="btn" type="button">Postavke firme</button></a>
+    <form method="post" action="/logout" style="margin:0;">
+      <button class="btn" type="submit">Odjava</button>
+    </form>
   </div>
 
   <table>
     <thead>
       <tr>
-        <th>Ponuda</th>
-        <th>Status</th>
-        <th>Klijent</th>
+        <th>ID</th>
+        <th>Broj</th>
         <th>Datum</th>
-        <th class="right">Ukupno</th>
+        <th>Klijent</th>
+        <th>Status</th>
         <th>Otvori</th>
       </tr>
     </thead>
     <tbody>
       {% for o in offers %}
-        {% set vr = (o.get("vat_rate") or 0) %}
-        {% set net = (o.get("total") or 0) %}
-        {% set gross = net + (net * (vr/100.0)) %}
-        <tr>
-          <td>{{ o.get("offer_no") or ("#" ~ o.get("id")) }}</td>
-          <td><span class="pill">{{ o.get("status") or "DRAFT" }}</span></td>
-          <td>{{ o.get("client_name") or "" }}</td>
-          <td>
-            {% if o.get("created_at") %}
-              {{ o.get("created_at").strftime("%d.%m.%Y %H:%M") }}
-            {% endif %}
-            {% if o.get("accepted_at") %}
-              <div class="muted">Prihvaćeno: {{ o.get("accepted_at").strftime("%d.%m.%Y %H:%M") }}</div>
-            {% endif %}
-          </td>
-          <td class="right">{{ '%.2f'|format(gross) }} €</td>
-          <td>
-            <form method="post" action="/offers/open" style="margin:0;">
-              <input type="hidden" name="offer_id" value="{{ o.get('id') }}">
-              <button class="btn" type="submit">Otvori</button>
-            </form>
-          </td>
-        </tr>
+      <tr>
+        <td>{{ o.id }}</td>
+        <td>{{ o.offer_no }}</td>
+        <td>{{ o.created_at.strftime('%d.%m.%Y %H:%M') if o.created_at else '' }}</td>
+        <td>{{ o.client_name or '' }}</td>
+        <td>{{ o.status }}</td>
+        <td>
+          <form method="post" action="/offers/open" style="margin:0;">
+            <input type="hidden" name="offer_id" value="{{ o.id }}" />
+            <button class="btn btn-primary" type="submit">Otvori</button>
+          </form>
+        </td>
+      </tr>
       {% endfor %}
-
-      {% if not offers or (offers|length == 0) %}
-        <tr><td colspan="6" class="muted">Nema ponuda.</td></tr>
+      {% if offers|length == 0 %}
+        <tr><td colspan="6" class="muted">Nema ponuda još.</td></tr>
       {% endif %}
     </tbody>
   </table>
