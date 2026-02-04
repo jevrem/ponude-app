@@ -137,3 +137,25 @@ def list_items(offer_id: int):
 def clear_items(offer_id: int) -> None:
     with get_conn() as conn:
         conn.execute("delete from offer_items where offer_id=%s", (offer_id,))
+
+
+
+def list_offers(user: str):
+    """List offers for a user with totals."""
+    with get_conn() as conn:
+        return conn.execute(
+            """
+            select
+              o.id,
+              o.offer_no,
+              o.client_name,
+              o.created_at,
+              coalesce(sum(i.line_total), 0) as total
+            from offers o
+            left join offer_items i on i.offer_id = o.id
+            where o.user_name = %s
+            group by o.id, o.offer_no, o.client_name, o.created_at
+            order by o.created_at desc, o.id desc
+            """,
+            (user,),
+        ).fetchall()
