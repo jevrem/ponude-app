@@ -5,16 +5,6 @@ import psycopg
 from psycopg.rows import dict_row
 
 
-def _strip_wrapping_quotes(s: str) -> str:
-    # Robustly remove accidental leading/trailing quotes, even if only one side is present.
-    s = (s or "").strip()
-    while s and s[0] in ("'", '"'):
-        s = s[1:].lstrip()
-    while s and s[-1] in ("'", '"'):
-        s = s[:-1].rstrip()
-    return s
-
-
 def _normalize_db_url(raw: str) -> str:
     """Normalize DATABASE_URL.
 
@@ -26,28 +16,18 @@ def _normalize_db_url(raw: str) -> str:
     s = (raw or "").strip()
 
     # If user pasted the Neon CLI snippet, it often starts with: psql '...'
-    if s.lower().startswith("psql"):
-        # Drop the leading "psql" token and keep the rest
-        parts = s.split(None, 1)
-        s = parts[1].strip() if len(parts) > 1 else ""
+    if s.startswith("psql"):
+        s = s[4:].strip()
 
-    s = _strip_wrapping_quotes(s)
+    # Strip wrapping quotes
+    if (s.startswith("'") and s.endswith("'")) or (s.startswith('"') and s.endswith('"')):
+        s = s[1:-1].strip()
 
-    # Sometimes env var contains extra tokens; keep only the actual URL.
-    if "postgres://" in s:
-        s = s[s.find("postgres://") :].strip()
-    elif "postgresql://" in s:
-        s = s[s.find("postgresql://") :].strip()
-
-    # If there are still spaces, keep only first token (a real URL has no spaces)
+    # If there are still spaces, keep only first token (the URL itself has no spaces)
     if " " in s:
         s = s.split()[0].strip()
-
-    s = _strip_wrapping_quotes(s)
-
-    # Remove an accidental trailing semicolon if copied from somewhere
-    if s.endswith(";"):
-        s = s[:-1].strip()
+        if (s.startswith("'") and s.endswith("'")) or (s.startswith('"') and s.endswith('"')):
+            s = s[1:-1].strip()
 
     return s
 
@@ -58,12 +38,10 @@ def _db_url() -> str:
         raise RuntimeError("DATABASE_URL nije postavljen (Render Environment var).")
 
     url = _normalize_db_url(raw)
-
     if not (url.startswith("postgres://") or url.startswith("postgresql://")):
         raise RuntimeError(
             "DATABASE_URL izgleda krivo. Zalijepi samo postgres URL (bez 'psql')."
         )
-
     return url
 
 
@@ -97,8 +75,6 @@ def init_db():
             );
             """
         )
-
-        # Indexes (NOTE: offer_items has no user_name; we index by offer_id instead)
         conn.execute("create index if not exists idx_offers_user_name on offers(user_name);")
         conn.execute("create index if not exists idx_offer_items_offer_id on offer_items(offer_id);")
 
@@ -148,4 +124,26 @@ def delete_item(offer_id: int, item_id: int) -> None:
         conn.execute(
             "delete from offer_items where offer_id=%s and id=%s",
             (offer_id, item_id),
+        )
+
+
+
+def get_offer(user: str, offer_id: int):
+    with get_conn() as conn:
+        return conn.execute(
+            """
+            select id, user_name, client_name, created_at
+            from offers
+            where id=%s and user_name=%s
+            """,
+            (offer_id, user),
+        ).fetchone()
+
+
+
+def update_offer_client_name(user: str, offer_id: int, client_name: str | None) -> None:
+    with get_conn() as conn:
+        conn.execute(
+            "update offers set client_name=%s where id=%s and user_name=%s",
+            (client_name, offer_id, user),
         )
