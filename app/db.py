@@ -5,114 +5,101 @@ import psycopg
 from psycopg.rows import dict_row
 
 
-def _normalize_db_url(raw: str) -> str:
-    """Normalize DATABASE_URL.
+def _clean_db_url(raw: str) -> str:
+    """
+    Render ENV DATABASE_URL mora biti čist URL.
 
-    Accepts either a plain postgres URL or a Neon 'psql' snippet like:
-        psql 'postgres://user:pass@host/db?sslmode=require'
-
-    Returns a clean URL suitable for psycopg.connect().
+    Dozvoljavamo i Neon "psql '...'"
+    Skidamo psql prefix, navodnike i eventualni trailing apostrof koji zna ostati.
     """
     s = (raw or "").strip()
 
-    # If user pasted the Neon CLI snippet, it often starts with: psql '...'
+    # Neki kopiraju cijeli snippet:  psql 'postgresql://...'
     if s.startswith("psql"):
         s = s[4:].strip()
 
-    # Strip wrapping quotes
-    if (s.startswith("'") and s.endswith("'")) or (s.startswith('"') and s.endswith('"')):
+    # Oguli višestruke početne/završne navodnike
+    while len(s) >= 2 and ((s[0] == "'" and s[-1] == "'") or (s[0] == '"' and s[-1] == '"')):
         s = s[1:-1].strip()
 
-    # If there are still spaces, keep only first token (the URL itself has no spaces)
+    # Ako je ostao samo jedan navodnik
+    s = s.strip().strip("'").strip('"')
+
+    # Ako ima razmake, uzmi prvi token
     if " " in s:
-        s = s.split()[0].strip()
-        if (s.startswith("'") and s.endswith("'")) or (s.startswith('"') and s.endswith('"')):
-            s = s[1:-1].strip()
+        s = s.split()[0].strip().strip("'").strip('"')
+
+    # Zadnja sigurnost: makni trailing navodnike (npr. require')
+    s = s.rstrip("'").rstrip('"')
 
     return s
 
 
 def _db_url() -> str:
-    raw = os.getenv("DATABASE_URL", "").strip()
-    if not raw:
-        raise RuntimeError("DATABASE_URL nije postavljen (Render Environment var).")
+    raw = os.getenv("DATABASE_URL", "")
+    url = _clean_db_url(raw)
 
-    url = _normalize_db_url(raw)
+    if not url:
+        raise RuntimeError("DATABASE_URL nije postavljen (Render → Environment).")
+
     if not (url.startswith("postgres://") or url.startswith("postgresql://")):
-        raise RuntimeError(
-            "DATABASE_URL izgleda krivo. Zalijepi samo postgres URL (bez 'psql')."
-        )
+        raise RuntimeError("DATABASE_URL mora biti postgres/postgresql URL (bez 'psql').")
+
     return url
 
 
 @contextmanager
 def get_conn():
-    with psycopg.connect(_db_url(), row_factory=dict_row) as conn:
+    # connect_timeout da deploy ne visi predugo ako DB spava
+    with psycopg.connect(_db_url(), row_factory=dict_row, connect_timeout=10) as conn:
         yield conn
 
 
-def init_db():
+def init_db() -> None:
     with get_conn() as conn:
         conn.execute(
             """
-            create table if not exists offers (
+            create table if not exists offer_items (
               id bigserial primary key,
               user_name text not null,
-              client_name text,
+              name text not null,
+              qty numeric(12,2) not null default 1,
+              price numeric(12,2) not null default 0,
+              line_total numeric(12,2) not null default 0,
               created_at timestamptz not null default now()
             );
             """
         )
         conn.execute(
-            """
-            create table if not exists offer_items (
-              id bigserial primary key,
-              offer_id bigint not null references offers(id) on delete cascade,
-              name text not null,
-              qty numeric(12,2) not null default 1,
-              price numeric(12,2) not null default 0,
-              line_total numeric(12,2) not null default 0
-            );
-            """
+            "create index if not exists idx_offer_items_user_name on offer_items(user_name);"
         )
-        conn.execute("create index if not exists idx_offers_user_name on offers(user_name);")
-        conn.execute("create index if not exists idx_offer_items_offer_id on offer_items(offer_id);")
 
 
-def create_offer(user: str, client_name: str | None = None) -> int:
-    with get_conn() as conn:
-        row = conn.execute(
-            "insert into offers(user_name, client_name) values (%s, %s) returning id",
-            (user, client_name),
-        ).fetchone()
-        return int(row["id"])
-
-
-def add_item(offer_id: int, name: str, qty: float, price: float) -> None:
+def add_item(*, user: str, name: str, qty: float, price: float) -> None:
     line_total = float(qty) * float(price)
     with get_conn() as conn:
         conn.execute(
             """
-            insert into offer_items(offer_id, name, qty, price, line_total)
+            insert into offer_items(user_name, name, qty, price, line_total)
             values (%s, %s, %s, %s, %s)
             """,
-            (offer_id, name, qty, price, line_total),
+            (user, name, qty, price, line_total),
         )
 
 
-def list_items(offer_id: int):
+def list_items(user: str):
     with get_conn() as conn:
         return conn.execute(
             """
             select id, name, qty, price, line_total
             from offer_items
-            where offer_id=%s
+            where user_name=%s
             order by id asc
             """,
-            (offer_id,),
+            (user,),
         ).fetchall()
 
 
-def clear_items(offer_id: int) -> None:
+def clear_items(user: str) -> None:
     with get_conn() as conn:
-        conn.execute("delete from offer_items where offer_id=%s", (offer_id,))
+        conn.execute("delete from offer_items where user_name=%s", (user,))
