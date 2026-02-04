@@ -28,6 +28,9 @@ from .db import (
     list_offers,
     list_clients,
     upsert_client,
+    upsert_settings,
+    get_settings,
+    update_offer_meta,
 )
 from .security import verify_credentials
 
@@ -157,6 +160,11 @@ def offer_page(request: Request):
     clients = [r["name"] for r in clients_rows] if clients_rows else []
 
     items = list_items(offer_id)
+
+    # Auto set status SENT when downloading PDF from DRAFT
+    if (offer.get("status") or "DRAFT") == "DRAFT":
+        update_offer_status(user=user, offer_id=offer_id, status="SENT")
+        offer["status"] = "SENT"
     subtotal = sum(float(i["line_total"]) for i in items) if items else 0.0
 
     return templates.TemplateResponse(
@@ -258,6 +266,37 @@ def offer_status(request: Request, status: str = Form("DRAFT")):
     return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
 
 
+@app.post("/offer/meta")
+def offer_meta(
+    request: Request,
+    terms_delivery: str = Form(""),
+    terms_payment: str = Form(""),
+    note: str = Form(""),
+    place: str = Form(""),
+    signed_by: str = Form(""),
+):
+    user, resp = _require_user(request)
+    if resp:
+        return resp
+
+    offer_id = _get_or_create_offer_id(request)
+    offer_row = get_offer(user=user, offer_id=offer_id)
+    offer = dict(offer_row) if offer_row else {}
+    if _is_locked(offer):
+        return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
+
+    update_offer_meta(
+        user=user,
+        offer_id=offer_id,
+        terms_delivery=(terms_delivery or "").strip() or None,
+        terms_payment=(terms_payment or "").strip() or None,
+        note=(note or "").strip() or None,
+        place=(place or "").strip() or None,
+        signed_by=(signed_by or "").strip() or None,
+    )
+    return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
+
+
 @app.get("/offers", response_class=HTMLResponse)
 def offers_page(request: Request, status: str | None = None):
     user, resp = _require_user(request)
@@ -285,6 +324,45 @@ def offers_open(request: Request, offer_id: int):
     return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
 
 
+@app.get("/settings", response_class=HTMLResponse)
+def settings_page(request: Request):
+    user, resp = _require_user(request)
+    if resp:
+        return resp
+
+    row = get_settings(user)
+    settings = dict(row) if row else {}
+    return templates.TemplateResponse("settings.html", {"request": request, "user": user, "settings": settings})
+
+
+@app.post("/settings")
+def settings_save(
+    request: Request,
+    company_name: str = Form(""),
+    company_address: str = Form(""),
+    company_oib: str = Form(""),
+    company_iban: str = Form(""),
+    company_email: str = Form(""),
+    company_phone: str = Form(""),
+    logo_path: str = Form(""),
+):
+    user, resp = _require_user(request)
+    if resp:
+        return resp
+
+    upsert_settings(
+        user=user,
+        company_name=(company_name or "").strip() or None,
+        company_address=(company_address or "").strip() or None,
+        company_oib=(company_oib or "").strip() or None,
+        company_iban=(company_iban or "").strip() or None,
+        company_email=(company_email or "").strip() or None,
+        company_phone=(company_phone or "").strip() or None,
+        logo_path=(logo_path or "").strip() or None,
+    )
+    return RedirectResponse(url="/settings", status_code=HTTP_303_SEE_OTHER)
+
+
 @app.get("/offer.xlsx")
 def offer_excel(request: Request):
     user, resp = _require_user(request)
@@ -296,6 +374,11 @@ def offer_excel(request: Request):
     offer = dict(offer_row) if offer_row else {}
 
     items = list_items(offer_id)
+
+    # Auto set status SENT when downloading PDF from DRAFT
+    if (offer.get("status") or "DRAFT") == "DRAFT":
+        update_offer_status(user=user, offer_id=offer_id, status="SENT")
+        offer["status"] = "SENT"
 
     wb = Workbook()
     ws = wb.active
@@ -335,6 +418,7 @@ def offer_excel(request: Request):
 
 @app.get("/offer.pdf")
 def offer_pdf(request: Request):
+    # auto_set_sent_on_pdf
     user, resp = _require_user(request)
     if resp:
         return resp
@@ -343,6 +427,11 @@ def offer_pdf(request: Request):
     offer_row = get_offer(user=user, offer_id=offer_id)
     offer = dict(offer_row) if offer_row else {}
     items = list_items(offer_id)
+
+    # Auto set status SENT when downloading PDF from DRAFT
+    if (offer.get("status") or "DRAFT") == "DRAFT":
+        update_offer_status(user=user, offer_id=offer_id, status="SENT")
+        offer["status"] = "SENT"
 
     _ensure_pdf_font()
     title_font = PDF_FONT_NAME if _pdf_font_ready else "Helvetica"
@@ -358,23 +447,35 @@ def offer_pdf(request: Request):
 
     # Logo (optional)
     try:
-        if COMPANY_LOGO_PATH and os.path.exists(COMPANY_LOGO_PATH):
-            c.drawImage(COMPANY_LOGO_PATH, 420, y - 10, width=120, height=40, preserveAspectRatio=True, mask="auto")
+        if logo_path and os.path.exists(logo_path):
+            c.drawImage(logo_path, 420, y - 10, width=120, height=40, preserveAspectRatio=True, mask="auto")
     except Exception:
         pass
 
     y -= 24
     c.setFont(body_font, 10)
 
+    row_settings = get_settings(user)
+    settings = dict(row_settings) if row_settings else {}
+
+    # Prefer DB settings over ENV
+    company_name = settings.get('company_name') or COMPANY_NAME
+    company_address = settings.get('company_address') or COMPANY_ADDRESS
+    company_oib = settings.get('company_oib') or COMPANY_OIB
+    company_iban = settings.get('company_iban') or COMPANY_IBAN
+    company_email = settings.get('company_email') or COMPANY_EMAIL
+    company_phone = settings.get('company_phone') or COMPANY_PHONE
+    logo_path = settings.get('logo_path') or COMPANY_LOGO_PATH
+
     # Company block (only if set)
-    if COMPANY_NAME:
-        c.drawString(50, y, COMPANY_NAME); y -= 14
-    if COMPANY_ADDRESS:
-        c.drawString(50, y, COMPANY_ADDRESS); y -= 14
-    company_line = " • ".join([p for p in [f"OIB: {COMPANY_OIB}" if COMPANY_OIB else "", f"IBAN: {COMPANY_IBAN}" if COMPANY_IBAN else ""] if p])
+    if company_name:
+        c.drawString(50, y, company_name); y -= 14
+    if company_address:
+        c.drawString(50, y, company_address); y -= 14
+    company_line = " • ".join([p for p in [f"OIB: {company_oib}" if company_oib else "", f"IBAN: {company_iban}" if company_iban else ""] if p])
     if company_line:
         c.drawString(50, y, company_line); y -= 14
-    contact_line = " • ".join([p for p in [COMPANY_EMAIL, COMPANY_PHONE] if p])
+    contact_line = " • ".join([p for p in [company_email, company_phone] if p])
     if contact_line:
         c.drawString(50, y, contact_line); y -= 14
 
@@ -387,6 +488,11 @@ def offer_pdf(request: Request):
     c.drawString(50, y, f"Korisnik: {user}"); y -= 14
     c.drawString(50, y, f"Klijent: {offer.get('client_name') or ''}"); y -= 14
     c.drawString(50, y, f"Status: {offer.get('status') or 'DRAFT'}"); y -= 14
+    c.drawString(50, y, f"Mjesto: {offer.get('place') or '' }"); y -= 14
+    c.drawString(50, y, f"Rok isporuke: {offer.get('terms_delivery') or '' }"); y -= 14
+    c.drawString(50, y, f"Rok plaćanja: {offer.get('terms_payment') or '' }"); y -= 14
+    c.drawString(50, y, f"Napomena: {offer.get('note') or '' }"); y -= 14
+
     c.drawString(50, y, f"Datum: {(offer.get('created_at').strftime('%d.%m.%Y %H:%M') if offer.get('created_at') else datetime.now().strftime('%d.%m.%Y %H:%M'))}")
     y -= 22
 
@@ -412,7 +518,7 @@ def offer_pdf(request: Request):
             # footer on page break
             try:
                 c.setFont(body_font, 9)
-                footer = " • ".join([p for p in [f"OIB: {COMPANY_OIB}" if COMPANY_OIB else "", COMPANY_EMAIL or "", COMPANY_PHONE or ""] if p])
+                footer = " • ".join([p for p in [f"OIB: {company_oib}" if company_oib else "", company_email or "", company_phone or ""] if p])
                 if footer:
                     c.drawString(50, 40, footer)
             except Exception:
@@ -444,10 +550,16 @@ def offer_pdf(request: Request):
     c.drawRightString(440, y, "Međuzbroj:")
     c.drawRightString(545, y, f"{subtotal:.2f} €")
 
+    y -= 50
+    c.setFont(body_font, 10)
+    c.drawString(50, y, "Potpis: ____________________________")
+    y -= 14
+    c.drawString(50, y, f"{offer.get('signed_by') or '' }")
+
     # Footer
     try:
         c.setFont(body_font, 9)
-        footer = " • ".join([p for p in [f"OIB: {COMPANY_OIB}" if COMPANY_OIB else "", f"IBAN: {COMPANY_IBAN}" if COMPANY_IBAN else "", COMPANY_EMAIL or "", COMPANY_PHONE or ""] if p])
+        footer = " • ".join([p for p in [f"OIB: {company_oib}" if company_oib else "", f"IBAN: {company_iban}" if company_iban else "", company_email or "", company_phone or ""] if p])
         if footer:
             c.drawString(50, 40, footer)
     except Exception:
