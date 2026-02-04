@@ -45,7 +45,7 @@
 <div class="topbar">
   <div>
     <h1>Nova ponuda</h1>
-    <div class="muted">Prijavljen: {{ user }}</div>
+    <div class="muted">Prijavljen: {{ user }} | Aktivna ponuda #{{ request.session.get("offer_id") }}</div>
   </div>
 
   <form method="post" action="/logout">
@@ -54,11 +54,12 @@
 </div>
 
 <div class="actions">
-  <a href="/offer.xlsx"><button class="btn" type="button">Download Excel</button></a>
-  <a href="/offer.pdf"><button class="btn" type="button">Download PDF</button></a>
   <form method="post" action="/offer/new" style="margin:0;">
     <button class="btn" type="submit">Nova ponuda</button>
   </form>
+
+  <a href="/offer.xlsx"><button class="btn" type="button">Download Excel</button></a>
+  <a href="/offer.pdf"><button class="btn" type="button">Download PDF</button></a>
 
   <form method="post" action="/offer/clear" style="margin:0;">
     <button class="btn btn-danger" type="submit">Obriši sve stavke</button>
@@ -105,6 +106,7 @@
       <th class="num">Količina</th>
       <th class="num">Cijena</th>
       <th class="num">Ukupno</th>
+      <th>Obriši</th>
     </tr>
   </thead>
   <tbody>
@@ -114,10 +116,15 @@
         <td class="num">{{ '%.2f'|format(it.qty) }}</td>
         <td class="num">{{ '%.2f'|format(it.price) }}</td>
         <td class="num">{{ '%.2f'|format(it.line_total) }}</td>
+        <td>
+          <form method="post" action="/offer/item/delete/{{ it.id }}" style="margin:0;">
+            <button class="btn btn-danger" type="submit" onclick="return confirm('Obrisati ovu stavku?');">✖</button>
+          </form>
+        </td>
       </tr>
     {% else %}
       <tr>
-        <td colspan="4" class="muted">Nema stavki još. Dodaj prvu stavku gore.</td>
+        <td colspan="5" class="muted">Nema stavki još. Dodaj prvu stavku gore.</td>
       </tr>
     {% endfor %}
   </tbody>
