@@ -184,11 +184,12 @@ def offer_page(request: Request):
     clients = [r["name"] for r in clients_rows] if clients_rows else []
 
     items = list_items(offer_id)
-
-    # Auto set status SENT when downloading PDF from DRAFT
-    if (offer.get("status") or "DRAFT") == "DRAFT":
-        update_offer_status(user=user, offer_id=offer_id, status="SENT")
-        offer["status"] = "SENT"
+    # Optional: lock offer when downloading PDF (only if ?lock=1)
+    # Default behavior: downloading PDF does NOT change status.
+    if str(request.query_params.get("lock") or "").strip() == "1":
+        if (offer.get("status") or "DRAFT") == "DRAFT" and len(items) > 0:
+            update_offer_status(user=user, offer_id=offer_id, status="SENT")
+            offer["status"] = "SENT"
     subtotal = sum(float(i["line_total"]) for i in items) if items else 0.0
 
     return templates.TemplateResponse(
