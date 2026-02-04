@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from io import BytesIO
 from datetime import datetime
 
@@ -31,6 +32,8 @@ from .db import (
 from .security import verify_credentials
 
 
+BASE_DIR = Path(__file__).resolve().parent
+
 app = FastAPI()
 templates = Jinja2Templates(directory="app/templates")
 
@@ -43,9 +46,9 @@ COMPANY_OIB = os.getenv("COMPANY_OIB", "")
 COMPANY_IBAN = os.getenv("COMPANY_IBAN", "")
 COMPANY_EMAIL = os.getenv("COMPANY_EMAIL", "")
 COMPANY_PHONE = os.getenv("COMPANY_PHONE", "")
-COMPANY_LOGO_PATH = os.getenv("COMPANY_LOGO_PATH", "app/static/logo.png")
+COMPANY_LOGO_PATH = os.getenv("COMPANY_LOGO_PATH", str(BASE_DIR / "static" / "logo.png"))
 
-PDF_FONT_PATH = os.getenv("PDF_FONT_PATH", "app/static/DejaVuSans.ttf")
+PDF_FONT_PATH = os.getenv("PDF_FONT_PATH", str(BASE_DIR / "static" / "DejaVuSans.ttf"))
 PDF_FONT_NAME = os.getenv("PDF_FONT_NAME", "DejaVuSans")
 
 _pdf_font_ready = False
@@ -342,7 +345,7 @@ def offer_pdf(request: Request):
     items = list_items(offer_id)
 
     _ensure_pdf_font()
-    title_font = PDF_FONT_NAME if _pdf_font_ready else "Helvetica-Bold"
+    title_font = PDF_FONT_NAME if _pdf_font_ready else "Helvetica"
     body_font = PDF_FONT_NAME if _pdf_font_ready else "Helvetica"
 
     bio = BytesIO()
