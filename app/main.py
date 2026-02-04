@@ -113,7 +113,10 @@ def _normalize_status(s: str | None) -> str:
 
 
 def _is_locked(offer: dict) -> bool:
-    return (offer.get("status") or "DRAFT").upper() in ("SENT", "ACCEPTED")
+    # Ponuda je *editabilna* u DRAFT i SENT fazi.
+    # Zaključavamo tek kad je ACCEPTED.
+    return (offer.get("status") == "ACCEPTED")
+
 
 
 def _get_or_create_offer_id(request: Request) -> int:
@@ -184,13 +187,8 @@ def offer_page(request: Request):
     clients = [r["name"] for r in clients_rows] if clients_rows else []
 
     items = list_items(offer_id)
-    # Optional: lock offer when downloading PDF (only if ?lock=1)
-    # Default behavior: downloading PDF does NOT change status.
-    if str(request.query_params.get("lock") or "").strip() == "1":
-        if (offer.get("status") or "DRAFT") == "DRAFT" and len(items) > 0:
-            update_offer_status(user=user, offer_id=offer_id, status="SENT")
-            offer["status"] = "SENT"
-    subtotal = sum(float(i["line_total"]) for i in items) if items else 0.0
+
+        subtotal = sum(float(i["line_total"]) for i in items) if items else 0.0
 
     return templates.TemplateResponse(
         "offer.html",
@@ -414,11 +412,7 @@ def offer_excel(request: Request):
 
     items = list_items(offer_id)
 
-    # Auto set status SENT when downloading PDF from DRAFT
-    if (offer.get("status") or "DRAFT") == "DRAFT":
-        update_offer_status(user=user, offer_id=offer_id, status="SENT")
-        offer["status"] = "SENT"
-
+    
     wb = Workbook()
     ws = wb.active
     ws.title = "Ponuda"
@@ -463,7 +457,6 @@ def offer_excel(request: Request):
 
 @app.get("/offer.pdf")
 def offer_pdf(request: Request):
-    # auto_set_sent_on_pdf
     user, resp = _require_user(request)
     if resp:
         return resp
@@ -473,11 +466,7 @@ def offer_pdf(request: Request):
     offer = dict(offer_row) if offer_row else {}
     items = list_items(offer_id)
 
-    # Auto set status SENT when downloading PDF from DRAFT
-    if (offer.get("status") or "DRAFT") == "DRAFT":
-        update_offer_status(user=user, offer_id=offer_id, status="SENT")
-        offer["status"] = "SENT"
-
+    
     _ensure_pdf_font()
     title_font = PDF_FONT_NAME if _pdf_font_ready else "Helvetica"
     body_font = PDF_FONT_NAME if _pdf_font_ready else "Helvetica"
