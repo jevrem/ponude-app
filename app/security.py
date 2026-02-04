@@ -1,30 +1,71 @@
 import os
+import hmac
+from typing import Optional
+
 from fastapi import Request
-from fastapi.responses import RedirectResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.status import HTTP_303_SEE_OTHER
 
-def _users_from_env():
-    # For MVP: store credentials as Render env vars (not in code).
-    u1 = os.getenv("USER1_USERNAME", "")
-    p1 = os.getenv("USER1_PASSWORD", "")
-    u2 = os.getenv("USER2_USERNAME", "")
-    p2 = os.getenv("USER2_PASSWORD", "")
-    users = {}
-    if u1 and p1:
-        users[u1] = p1
-    if u2 and p2:
-        users[u2] = p2
+
+def _users() -> dict[str, str]:
+    """Load users from env.
+
+    Format:
+      USERS=marko:lozinka,ana:lozinka2
+
+    If not provided, falls back to two demo users (change in production).
+    """
+    raw = os.getenv("USERS", "").strip()
+    if not raw:
+        return {
+            "marko": os.getenv("MARKO_PASSWORD", "1234"),
+            "ana": os.getenv("ANA_PASSWORD", "1234"),
+        }
+
+    users: dict[str, str] = {}
+    for part in raw.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if ":" not in part:
+            continue
+        u, p = part.split(":", 1)
+        u = u.strip()
+        p = p.strip()
+        if u:
+            users[u] = p
     return users
 
+
 def verify_credentials(username: str, password: str) -> bool:
-    users = _users_from_env()
-    if not users:
+    username = (username or "").strip()
+    password = (password or "").strip()
+    if not username or not password:
         return False
-    return users.get(username) == password
 
-def require_login(request: Request):
-    if not request.session.get("user"):
-        raise RedirectResponse(url="/login", status_code=HTTP_303_SEE_OTHER)
+    users = _users()
+    expected = users.get(username)
+    if expected is None:
+        return False
 
-def logout(request: Request):
+    # constant-time compare
+    return hmac.compare_digest(str(expected), str(password))
+
+
+def require_login(request: Request) -> str:
+    """Ensure session user exists.
+
+    Raises a proper HTTPException with 303 + Location header, so Starlette can redirect.
+    """
+    user = request.session.get("user")
+    if not user:
+        raise StarletteHTTPException(
+            status_code=HTTP_303_SEE_OTHER,
+            detail="Not authenticated",
+            headers={"Location": "/login"},
+        )
+    return user
+
+
+def logout(request: Request) -> None:
     request.session.clear()
