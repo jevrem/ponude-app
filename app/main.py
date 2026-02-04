@@ -139,8 +139,8 @@ def offer_excel(request: Request):
 
     ws.append(["Ponuda #", offer_id])
     ws.append(["Korisnik", user])
-    ws.append(["Klijent", (offer["client_name"] if offer else None) or ""])
-    ws.append(["Datum", (offer["created_at"].strftime("%d.%m.%Y %H:%M") if offer and offer.get("created_at") else datetime.now().strftime("%d.%m.%Y %H:%M"))])
+    ws.append(["Klijent", (offer.get("client_name") or "")])
+    ws.append(["Datum", (offer.get("created_at").strftime("%d.%m.%Y %H:%M") if offer.get("created_at") else datetime.now().strftime("%d.%m.%Y %H:%M"))])
     ws.append([])
 
     ws.append(["Naziv", "Količina", "Cijena", "Ukupno"])
@@ -185,7 +185,7 @@ def offer_pdf(request: Request):
     y -= 22
 
     c.setFont("Helvetica", 10)
-    offer = get_offer(user=user, offer_id=offer_id)
+    # offer already loaded as dict above
 
     c.drawString(50, y, f"Ponuda #: {offer_id}")
     y -= 16
@@ -193,7 +193,7 @@ def offer_pdf(request: Request):
     y -= 16
     c.drawString(50, y, f"Klijent: {(offer["client_name"] if offer else None) or ""}")
     y -= 16
-    c.drawString(50, y, f"Datum: {(offer["created_at"].strftime("%d.%m.%Y %H:%M") if offer and offer.get("created_at") else datetime.now().strftime("%d.%m.%Y %H:%M"))}")
+    c.drawString(50, y, f"Datum: {(offer.get("created_at").strftime("%d.%m.%Y %H:%M") if offer.get("created_at") else datetime.now().strftime("%d.%m.%Y %H:%M"))}")
     y -= 22
 
     c.setFont("Helvetica-Bold", 11)
