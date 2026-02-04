@@ -28,7 +28,7 @@ _db_import_error = None
 _security_import_error = None
 
 try:
-    from .db import init_db, create_offer, list_items, add_item, clear_items, delete_item
+    from .db import init_db, create_offer, get_offer, update_offer_client_name, list_items, add_item, clear_items, delete_item
 except Exception as e:
     _db_import_error = e
 
@@ -52,25 +52,6 @@ def health():
     return {"ok": True}
 
 
-def _get_or_create_offer_id(request: Request) -> int:
-    user = request.session.get("user")
-    if not user:
-        raise RuntimeError("User not in session")
-
-    offer_id = request.session.get("offer_id")
-    try:
-        offer_id_int = int(offer_id) if offer_id is not None else None
-    except Exception:
-        offer_id_int = None
-
-    if not offer_id_int:
-        offer_id_int = create_offer(user=user)
-        request.session["offer_id"] = offer_id_int
-
-    return offer_id_int
-
-
-
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
     user = request.session.get("user")
@@ -90,7 +71,6 @@ def login_form(request: Request):
 def login(request: Request, username: str = Form(...), password: str = Form(...)):
     if verify_credentials(username, password):
         request.session["user"] = username
-        request.session.pop("offer_id", None)
         return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
     return templates.TemplateResponse(
         "login.html",
@@ -108,8 +88,7 @@ def do_logout(request: Request):
 def offer_page(request: Request):
     require_login(request)
     user = request.session.get("user")
-    offer_id = _get_or_create_offer_id(request)
-    items = list_items(offer_id)
+    items = list_items(user)
     subtotal = sum(float(i["line_total"]) for i in items) if items else 0.0
     return templates.TemplateResponse(
         "offer.html",
@@ -125,18 +104,18 @@ def offer_add(
     price: float = Form(0),
 ):
     require_login(request)
-    offer_id = _get_or_create_offer_id(request)
+    user = request.session.get("user")
     name = (name or "").strip()
     if name:
-        add_item(offer_id=offer_id, name=name, qty=float(qty), price=float(price))
+        add_item(user=user, name=name, qty=float(qty), price=float(price))
     return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
 
 
 @app.post("/offer/clear")
 def offer_clear(request: Request):
     require_login(request)
-    offer_id = _get_or_create_offer_id(request)
-    clear_items(offer_id)
+    user = request.session.get("user")
+    clear_items(user)
     return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
 
 
@@ -148,27 +127,22 @@ def offer_item_delete(request: Request, item_id: int):
     return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
 
 
-@app.post("/offer/new")
-def offer_new(request: Request):
-    require_login(request)
-    user = request.session.get("user")
-    request.session.pop("offer_id", None)
-    offer_id = create_offer(user=user)
-    request.session["offer_id"] = offer_id
-    return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
-
-
-
 @app.get("/offer.xlsx")
 def offer_excel(request: Request):
     require_login(request)
     user = request.session.get("user")
-    offer_id = _get_or_create_offer_id(request)
-    items = list_items(offer_id)
+    items = list_items(user)
 
     wb = Workbook()
     ws = wb.active
     ws.title = "Ponuda"
+
+    ws.append(["Ponuda #", offer_id])
+    ws.append(["Korisnik", user])
+    ws.append(["Klijent", (offer["client_name"] if offer else None) or ""])
+    ws.append(["Datum", (offer["created_at"].strftime("%d.%m.%Y %H:%M") if offer and offer.get("created_at") else datetime.now().strftime("%d.%m.%Y %H:%M"))])
+    ws.append([])
+
     ws.append(["Naziv", "Količina", "Cijena", "Ukupno"])
 
     subtotal = 0.0
@@ -199,8 +173,7 @@ def offer_excel(request: Request):
 def offer_pdf(request: Request):
     require_login(request)
     user = request.session.get("user")
-    offer_id = _get_or_create_offer_id(request)
-    items = list_items(offer_id)
+    items = list_items(user)
 
     bio = BytesIO()
     c = canvas.Canvas(bio, pagesize=A4)
@@ -212,9 +185,15 @@ def offer_pdf(request: Request):
     y -= 22
 
     c.setFont("Helvetica", 10)
+    offer = get_offer(user=user, offer_id=offer_id)
+
+    c.drawString(50, y, f"Ponuda #: {offer_id}")
+    y -= 16
     c.drawString(50, y, f"Korisnik: {user}")
     y -= 16
-    c.drawString(50, y, f"Datum: {datetime.now().strftime('%d.%m.%Y %H:%M')}")
+    c.drawString(50, y, f"Klijent: {(offer["client_name"] if offer else None) or ""}")
+    y -= 16
+    c.drawString(50, y, f"Datum: {(offer["created_at"].strftime("%d.%m.%Y %H:%M") if offer and offer.get("created_at") else datetime.now().strftime("%d.%m.%Y %H:%M"))}")
     y -= 22
 
     c.setFont("Helvetica-Bold", 11)
@@ -273,3 +252,13 @@ def offer_pdf(request: Request):
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@app.post("/offer/client")
+def offer_client(request: Request, client_name: str = Form("")):
+    require_login(request)
+    user = request.session.get("user")
+    offer_id = _get_or_create_offer_id(request)
+    client_name = (client_name or "").strip() or None
+    update_offer_client_name(user=user, offer_id=offer_id, client_name=client_name)
+    return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
