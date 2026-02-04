@@ -101,9 +101,8 @@ def _startup():
 def _require_user(request: Request):
     user = request.session.get("user")
     if not user:
-        return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER), RedirectResponse(url="/login", status_code=HTTP_303_SEE_OTHER)
+        return None, RedirectResponse(url="/login", status_code=HTTP_303_SEE_OTHER)
     return user, None
-
 
 def _normalize_status(s: str | None) -> str:
     s = (s or "").strip().upper()
@@ -184,10 +183,6 @@ def offer_page(request: Request):
     clients = [r["name"] for r in clients_rows] if clients_rows else []
 
     items = list_items(offer_id)
-
-    # Auto set status SENT when downloading PDF from DRAFT
-    if (offer.get("status") or "DRAFT") == "DRAFT":
-        offer["status"] = "SENT"
     subtotal = sum(float(i["line_total"]) for i in items) if items else 0.0
 
     return templates.TemplateResponse(
@@ -304,12 +299,26 @@ def offer_meta(
         return resp
 
     offer_id = _get_or_create_offer_id(request)
+
     offer_row = get_offer(user=user, offer_id=offer_id)
     offer = dict(offer_row) if offer_row else {}
     if _is_locked(offer):
         return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
 
+    update_offer_meta(
+        user=user,
+        offer_id=offer_id,
+        terms_delivery=(terms_delivery or "").strip() or None,
+        terms_payment=(terms_payment or "").strip() or None,
+        note=(note or "").strip() or None,
+        place=(place or "").strip() or None,
+        signed_by=(signed_by or "").strip() or None,
+        vat_rate=float(vat_rate or 0),
+    )
+    return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
 
+
+@app.
 @app.post("/offer/accept")
 def offer_accept(request: Request):
     user, resp = _require_user(request)
@@ -411,11 +420,6 @@ def offer_excel(request: Request):
     offer = dict(offer_row) if offer_row else {}
 
     items = list_items(offer_id)
-
-    # Auto set status SENT when downloading PDF from DRAFT
-    if (offer.get("status") or "DRAFT") == "DRAFT":
-        offer["status"] = "SENT"
-
     wb = Workbook()
     ws = wb.active
     ws.title = "Ponuda"
@@ -469,11 +473,6 @@ def offer_pdf(request: Request):
     offer_row = get_offer(user=user, offer_id=offer_id)
     offer = dict(offer_row) if offer_row else {}
     items = list_items(offer_id)
-
-    # Auto set status SENT when downloading PDF from DRAFT
-    if (offer.get("status") or "DRAFT") == "DRAFT":
-        offer["status"] = "SENT"
-
     _ensure_pdf_font()
     title_font = PDF_FONT_NAME if _pdf_font_ready else "Helvetica"
     body_font = PDF_FONT_NAME if _pdf_font_ready else "Helvetica"
@@ -485,13 +484,6 @@ def offer_pdf(request: Request):
     y = height - 60
     c.setFont(title_font, 16)
     c.drawString(50, y, "Ponuda")
-
-    # Logo (optional)
-    try:
-        if logo_path and os.path.exists(logo_path):
-            c.drawImage(logo_path, 420, y - 10, width=120, height=40, preserveAspectRatio=True, mask="auto")
-    except Exception:
-        pass
 
     y -= 24
     c.setFont(body_font, 10)
@@ -507,6 +499,14 @@ def offer_pdf(request: Request):
     company_email = settings.get('company_email') or COMPANY_EMAIL
     company_phone = settings.get('company_phone') or COMPANY_PHONE
     logo_path = settings.get('logo_path') or COMPANY_LOGO_PATH
+
+    # Logo (optional)
+    try:
+        if logo_path and os.path.exists(logo_path):
+            c.drawImage(logo_path, 420, y + 10, width=120, height=40, preserveAspectRatio=True, mask="auto")
+    except Exception:
+        pass
+
 
     # Company block (only if set)
     if company_name:
