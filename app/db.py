@@ -49,6 +49,19 @@ def init_db() -> None:
 
         conn.execute(
             """
+            create table if not exists company_settings (
+              user_name text primary key,
+              company_name text,
+              company_address text,
+              company_oib text,
+              company_iban text,
+              company_email text,
+              company_phone text,
+              logo_path text,
+              created_at timestamptz not null default now(),
+              updated_at timestamptz not null default now()
+            );
+
             create table if not exists clients (
               id bigserial primary key,
               user_name text not null,
@@ -71,6 +84,13 @@ def init_db() -> None:
 
         # Add status column
         conn.execute("alter table offers add column if not exists status text;")
+        # Offer meta fields
+        conn.execute("alter table offers add column if not exists terms_delivery text;")
+        conn.execute("alter table offers add column if not exists terms_payment text;")
+        conn.execute("alter table offers add column if not exists note text;")
+        conn.execute("alter table offers add column if not exists place text;")
+        conn.execute("alter table offers add column if not exists signed_by text;")
+
         conn.execute("update offers set status='DRAFT' where status is null;")
         try:
             conn.execute("alter table offers alter column status set default 'DRAFT';")
@@ -111,7 +131,8 @@ def get_offer(user: str, offer_id: int):
     with get_conn() as conn:
         return conn.execute(
             """
-            select id, user_name, client_name, created_at, offer_no, offer_year, offer_seq, status
+            select id, user_name, client_name, created_at, offer_no, offer_year, offer_seq, status,
+                   terms_delivery, terms_payment, note, place, signed_by
             from offers
             where id=%s and user_name=%s
             """,
@@ -217,4 +238,74 @@ def upsert_client(user: str, name: str) -> None:
             on conflict do nothing
             """,
             (user, name),
+        )
+
+
+
+def update_offer_meta(
+    user: str,
+    offer_id: int,
+    terms_delivery: str | None,
+    terms_payment: str | None,
+    note: str | None,
+    place: str | None,
+    signed_by: str | None,
+) -> None:
+    with get_conn() as conn:
+        conn.execute(
+            """
+            update offers
+            set terms_delivery=%s,
+                terms_payment=%s,
+                note=%s,
+                place=%s,
+                signed_by=%s
+            where id=%s and user_name=%s
+            """,
+            (terms_delivery, terms_payment, note, place, signed_by, offer_id, user),
+        )
+
+
+
+def get_settings(user: str):
+    with get_conn() as conn:
+        return conn.execute(
+            """
+            select user_name, company_name, company_address, company_oib, company_iban,
+                   company_email, company_phone, logo_path
+            from company_settings
+            where user_name=%s
+            """,
+            (user,),
+        ).fetchone()
+
+
+
+def upsert_settings(
+    user: str,
+    company_name: str | None,
+    company_address: str | None,
+    company_oib: str | None,
+    company_iban: str | None,
+    company_email: str | None,
+    company_phone: str | None,
+    logo_path: str | None,
+) -> None:
+    with get_conn() as conn:
+        conn.execute(
+            """
+            insert into company_settings(
+              user_name, company_name, company_address, company_oib, company_iban, company_email, company_phone, logo_path
+            ) values (%s,%s,%s,%s,%s,%s,%s,%s)
+            on conflict (user_name) do update set
+              company_name=excluded.company_name,
+              company_address=excluded.company_address,
+              company_oib=excluded.company_oib,
+              company_iban=excluded.company_iban,
+              company_email=excluded.company_email,
+              company_phone=excluded.company_phone,
+              logo_path=excluded.logo_path,
+              updated_at=now()
+            """,
+            (user, company_name, company_address, company_oib, company_iban, company_email, company_phone, logo_path),
         )
