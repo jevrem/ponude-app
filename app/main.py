@@ -30,7 +30,7 @@ from .db import (
     upsert_client,
     upsert_settings,
     get_settings,
-    update_offer_meta,    accept_offer,    update_offer_vat,
+    update_offer_meta,    accept_offer,
 )
 from .security import verify_credentials
 
@@ -101,7 +101,7 @@ def _startup():
 def _require_user(request: Request):
     user = request.session.get("user")
     if not user:
-        return None, RedirectResponse(url="/login", status_code=HTTP_303_SEE_OTHER)
+        return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER), RedirectResponse(url="/login", status_code=HTTP_303_SEE_OTHER)
     return user, None
 
 
@@ -113,10 +113,7 @@ def _normalize_status(s: str | None) -> str:
 
 
 def _is_locked(offer: dict) -> bool:
-    # Ponuda je *editabilna* u DRAFT i SENT fazi.
-    # Zaključavamo tek kad je ACCEPTED.
-    return (offer.get("status") == "ACCEPTED")
-
+    return (offer.get("status") or "DRAFT").upper() in ("SENT", "ACCEPTED")
 
 
 def _get_or_create_offer_id(request: Request) -> int:
@@ -188,7 +185,11 @@ def offer_page(request: Request):
 
     items = list_items(offer_id)
 
-        subtotal = sum(float(i["line_total"]) for i in items) if items else 0.0
+    # Auto set status SENT when downloading PDF from DRAFT
+    if (offer.get("status") or "DRAFT") == "DRAFT":
+        update_offer_status(user=user, offer_id=offer_id, status="SENT")
+        offer["status"] = "SENT"
+    subtotal = sum(float(i["line_total"]) for i in items) if items else 0.0
 
     return templates.TemplateResponse(
         "offer.html",
@@ -310,18 +311,6 @@ def offer_meta(
         return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
 
 
-@app.post("/offer/vat")
-def offer_vat(request: Request, vat_rate: float = Form(0)):
-    user, resp = _require_user(request)
-    if resp:
-        return resp
-
-    offer_id = _get_or_create_offer_id(request)
-    update_offer_vat(user=user, offer_id=offer_id, vat_rate=float(vat_rate or 0))
-    return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
-
-
-
 @app.post("/offer/accept")
 def offer_accept(request: Request):
     user, resp = _require_user(request)
@@ -424,7 +413,11 @@ def offer_excel(request: Request):
 
     items = list_items(offer_id)
 
-    
+    # Auto set status SENT when downloading PDF from DRAFT
+    if (offer.get("status") or "DRAFT") == "DRAFT":
+        update_offer_status(user=user, offer_id=offer_id, status="SENT")
+        offer["status"] = "SENT"
+
     wb = Workbook()
     ws = wb.active
     ws.title = "Ponuda"
