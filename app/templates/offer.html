@@ -55,8 +55,8 @@
     <div class="muted">Prijavljen: {{ user }}</div>
     <div class="badge">
       Aktivna ponuda #{{ request.session.get("offer_id") }}
-      {% if offer and offer.get("created_at") %}
-        • {{ offer["created_at"].strftime('%d.%m.%Y %H:%M') }}
+      {% if offer.get("created_at") %}
+        • {{ offer.get("created_at").strftime('%d.%m.%Y %H:%M') }}
       {% endif %}
     </div>
   </div>
@@ -85,7 +85,7 @@
   <form method="post" action="/offer/client" style="margin:0;">
     <label>Naziv klijenta</label>
     <div style="display:flex; gap:10px;">
-      <input name="client_name" placeholder="npr. Ivan Horvat" value="{{ (offer['client_name'] if offer and offer.get('client_name') else '') }}" />
+      <input name="client_name" placeholder="npr. Ivan Horvat" value="{{ offer.get('client_name', '') }}" />
       <button class="btn btn-primary" type="submit">Spremi</button>
     </div>
     <div class="muted" style="margin-top:6px;">Ovo ide u PDF i Excel.</div>
@@ -93,7 +93,7 @@
 
   <div>
     <label>Datum</label>
-    <input readonly value="{% if offer and offer.get('created_at') %}{{ offer['created_at'].strftime('%d.%m.%Y %H:%M') }}{% else %}{{ '' }}{% endif %}" />
+    <input readonly value="{% if offer.get('created_at') %}{{ offer.get('created_at').strftime('%d.%m.%Y %H:%M') }}{% else %}{{ '' }}{% endif %}" />
   </div>
 </div>
 
