@@ -113,7 +113,7 @@ def _normalize_status(s: str | None) -> str:
 
 
 def _is_locked(offer: dict) -> bool:
-    return (offer.get("status") or "DRAFT").upper() in ("SENT", "ACCEPTED")
+    return (offer.get("status") == "ACCEPTED")
 
 
 def _get_or_create_offer_id(request: Request) -> int:
@@ -187,7 +187,6 @@ def offer_page(request: Request):
 
     # Auto set status SENT when downloading PDF from DRAFT
     if (offer.get("status") or "DRAFT") == "DRAFT":
-        update_offer_status(user=user, offer_id=offer_id, status="SENT")
         offer["status"] = "SENT"
     subtotal = sum(float(i["line_total"]) for i in items) if items else 0.0
 
@@ -415,7 +414,6 @@ def offer_excel(request: Request):
 
     # Auto set status SENT when downloading PDF from DRAFT
     if (offer.get("status") or "DRAFT") == "DRAFT":
-        update_offer_status(user=user, offer_id=offer_id, status="SENT")
         offer["status"] = "SENT"
 
     wb = Workbook()
@@ -474,7 +472,6 @@ def offer_pdf(request: Request):
 
     # Auto set status SENT when downloading PDF from DRAFT
     if (offer.get("status") or "DRAFT") == "DRAFT":
-        update_offer_status(user=user, offer_id=offer_id, status="SENT")
         offer["status"] = "SENT"
 
     _ensure_pdf_font()
