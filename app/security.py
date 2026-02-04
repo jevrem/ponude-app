@@ -1,40 +1,65 @@
 import os
 import hmac
-from typing import Optional
-
 from fastapi import Request
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.status import HTTP_303_SEE_OTHER
 
 
+def _add(users: dict[str, str], u: str | None, p: str | None) -> None:
+    u = (u or "").strip()
+    p = (p or "").strip()
+    if u and p:
+        users[u] = p
+
+
 def _users() -> dict[str, str]:
-    """Load users from env.
+    """Return users from environment in a backward-compatible way.
 
-    Format:
-      USERS=marko:lozinka,ana:lozinka2
+    Supported formats (checked in this order):
 
-    If not provided, falls back to two demo users (change in production).
+    1) USERS="marko:pass,ana:pass2"
+    2) USER1_USERNAME / USER1_PASSWORD (+ USER2_USERNAME / USER2_PASSWORD ...)
+    3) USER1 / PASS1 (+ USER2 / PASS2 ...)
+    4) MARKO_PASSWORD / ANA_PASSWORD
+    5) Fallback demo:
+         marko / 1234
+         ana   / 1234
     """
-    raw = os.getenv("USERS", "").strip()
-    if not raw:
-        return {
-            "marko": os.getenv("MARKO_PASSWORD", "1234"),
-            "ana": os.getenv("ANA_PASSWORD", "1234"),
-        }
-
     users: dict[str, str] = {}
-    for part in raw.split(","):
-        part = part.strip()
-        if not part:
-            continue
-        if ":" not in part:
-            continue
-        u, p = part.split(":", 1)
-        u = u.strip()
-        p = p.strip()
-        if u:
-            users[u] = p
-    return users
+
+    raw = os.getenv("USERS", "").strip()
+    if raw:
+        for part in raw.split(","):
+            part = part.strip()
+            if not part or ":" not in part:
+                continue
+            u, p = part.split(":", 1)
+            _add(users, u, p)
+        if users:
+            return users
+
+    # Common Render-style vars
+    _add(users, os.getenv("USER1_USERNAME"), os.getenv("USER1_PASSWORD"))
+    _add(users, os.getenv("USER2_USERNAME"), os.getenv("USER2_PASSWORD"))
+    _add(users, os.getenv("USER3_USERNAME"), os.getenv("USER3_PASSWORD"))
+    if users:
+        return users
+
+    # Older naming
+    _add(users, os.getenv("USER1"), os.getenv("PASS1"))
+    _add(users, os.getenv("USER2"), os.getenv("PASS2"))
+    _add(users, os.getenv("USER3"), os.getenv("PASS3"))
+    if users:
+        return users
+
+    # Simple per-user password vars
+    _add(users, "marko", os.getenv("MARKO_PASSWORD"))
+    _add(users, "ana", os.getenv("ANA_PASSWORD"))
+    if users:
+        return users
+
+    # Fallback (so you can always log in on a fresh deploy)
+    return {"marko": "1234", "ana": "1234"}
 
 
 def verify_credentials(username: str, password: str) -> bool:
@@ -48,15 +73,11 @@ def verify_credentials(username: str, password: str) -> bool:
     if expected is None:
         return False
 
-    # constant-time compare
     return hmac.compare_digest(str(expected), str(password))
 
 
 def require_login(request: Request) -> str:
-    """Ensure session user exists.
-
-    Raises a proper HTTPException with 303 + Location header, so Starlette can redirect.
-    """
+    """Raise a proper redirect as an HTTPException (303)."""
     user = request.session.get("user")
     if not user:
         raise StarletteHTTPException(
@@ -65,7 +86,3 @@ def require_login(request: Request) -> str:
             headers={"Location": "/login"},
         )
     return user
-
-
-def logout(request: Request) -> None:
-    request.session.clear()
