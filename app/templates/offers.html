@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="hr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Ponude</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; }
+    h1 { margin: 0 0 6px 0; }
+    .topbar { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; }
+    .muted { color:#666; font-size:13px; }
+    .actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top: 10px; }
+    .btn { border:1px solid #ccc; background:#f7f7f7; padding:8px 12px; cursor:pointer; }
+    .btn-primary { border:1px solid #333; background:#eaeaea; font-weight:bold; }
+    table { width:100%; border-collapse:collapse; margin-top:16px; }
+    th, td { border:1px solid #ddd; padding:8px; text-align:left; }
+    th { background:#f5f5f5; }
+    td.num, th.num { text-align:right; }
+    .pill { display:inline-block; padding:3px 8px; border:1px solid #ddd; border-radius:999px; background:#fff; font-size:12px; }
+    form { margin:0; }
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <div>
+    <h1>Ponude</h1>
+    <div class="muted">Prijavljen: {{ user }}</div>
+  </div>
+  <form method="post" action="/logout">
+    <button class="btn" type="submit">Odjava</button>
+  </form>
+</div>
+
+<div class="actions">
+  <a href="/offer"><button class="btn" type="button">Nazad na aktivnu ponudu</button></a>
+  <form method="post" action="/offer/new">
+    <button class="btn btn-primary" type="submit">Nova ponuda</button>
+  </form>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th>Broj</th>
+      <th>Klijent</th>
+      <th>Datum</th>
+      <th class="num">Iznos</th>
+      <th>Otvori</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for o in offers %}
+    <tr>
+      <td><span class="pill">{{ o.get("offer_no") or ("#" ~ o.get("id")) }}</span></td>
+      <td>{{ o.get("client_name") or "" }}</td>
+      <td>{% if o.get("created_at") %}{{ o.get("created_at").strftime("%d.%m.%Y %H:%M") }}{% else %}{% endif %}</td>
+      <td class="num">{{ '%.2f'|format(o.get("total") or 0) }} €</td>
+      <td>
+        <form method="post" action="/offers/open/{{ o.get('id') }}">
+          <button class="btn" type="submit">Otvori</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+
+    {% if not offers or (offers|length == 0) %}
+    <tr>
+      <td colspan="5" class="muted">Nema ponuda još.</td>
+    </tr>
+    {% endif %}
+  </tbody>
+</table>
+
+</body>
+</html>
