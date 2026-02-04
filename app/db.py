@@ -1,5 +1,6 @@
 import os
 from contextlib import contextmanager
+from datetime import datetime
 
 import psycopg
 from psycopg.rows import dict_row
@@ -63,6 +64,10 @@ def init_db():
             );
             """
         )
+        # Add numbering columns (safe to run multiple times)
+        conn.execute("alter table offers add column if not exists offer_year int;")
+        conn.execute("alter table offers add column if not exists offer_seq int;")
+        conn.execute("alter table offers add column if not exists offer_no text;")
         conn.execute(
             """
             create table if not exists offer_items (
@@ -76,15 +81,31 @@ def init_db():
             """
         )
         conn.execute("create index if not exists idx_offers_user_name on offers(user_name);")
-        conn.execute("create index if not exists idx_offer_items_offer_id on offer_items(offer_id);")
-
-
-def create_offer(user: str, client_name: str | None = None) -> int:
+        conn.execute("create index if not exists idx_offers_user_year_seq on offers(user_name, offer_year, offer_seq);")
+        conn.execute("create index if not exists idx_offer_items_offer_id def create_offer(user: str, client_name: str | None = None) -> int:
+    year = datetime.now().year
     with get_conn() as conn:
-        row = conn.execute(
-            "insert into offers(user_name, client_name) values (%s, %s) returning id",
-            (user, client_name),
+        # Next sequence per user per year
+        row_seq = conn.execute(
+            """
+            select coalesce(max(offer_seq), 0) as max_seq
+            from offers
+            where user_name=%s and offer_year=%s
+            """,
+            (user, year),
         ).fetchone()
+        next_seq = int(row_seq["max_seq"] or 0) + 1
+        offer_no = f"{year}-{next_seq:04d}"
+
+        row = conn.execute(
+            """
+            insert into offers(user_name, client_name, offer_year, offer_seq, offer_no)
+            values (%s, %s, %s, %s, %s)
+            returning id
+            """,
+            (user, client_name, year, next_seq, offer_no),
+        ).fetchone()
+        return int(row["id"])
         return int(row["id"])
 
 
@@ -116,34 +137,3 @@ def list_items(offer_id: int):
 def clear_items(offer_id: int) -> None:
     with get_conn() as conn:
         conn.execute("delete from offer_items where offer_id=%s", (offer_id,))
-
-
-
-def delete_item(offer_id: int, item_id: int) -> None:
-    with get_conn() as conn:
-        conn.execute(
-            "delete from offer_items where offer_id=%s and id=%s",
-            (offer_id, item_id),
-        )
-
-
-
-def get_offer(user: str, offer_id: int):
-    with get_conn() as conn:
-        return conn.execute(
-            """
-            select id, user_name, client_name, created_at
-            from offers
-            where id=%s and user_name=%s
-            """,
-            (offer_id, user),
-        ).fetchone()
-
-
-
-def update_offer_client_name(user: str, offer_id: int, client_name: str | None) -> None:
-    with get_conn() as conn:
-        conn.execute(
-            "update offers set client_name=%s where id=%s and user_name=%s",
-            (client_name, offer_id, user),
-        )
