@@ -28,7 +28,7 @@ _db_import_error = None
 _security_import_error = None
 
 try:
-    from .db import init_db, create_offer, list_items, add_item, clear_items
+    from .db import init_db, create_offer, list_items, add_item, clear_items, delete_item
 except Exception as e:
     _db_import_error = e
 
@@ -137,6 +137,14 @@ def offer_clear(request: Request):
     require_login(request)
     offer_id = _get_or_create_offer_id(request)
     clear_items(offer_id)
+    return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
+
+
+@app.post("/offer/item/delete/{item_id}")
+def offer_item_delete(request: Request, item_id: int):
+    require_login(request)
+    offer_id = _get_or_create_offer_id(request)
+    delete_item(offer_id=offer_id, item_id=int(item_id))
     return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
 
 
