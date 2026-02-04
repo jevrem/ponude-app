@@ -30,7 +30,7 @@ from .db import (
     upsert_client,
     upsert_settings,
     get_settings,
-    update_offer_meta,
+    update_offer_meta,    accept_offer,
 )
 from .security import verify_credentials
 
@@ -68,6 +68,30 @@ def _ensure_pdf_font():
     except Exception:
         _pdf_font_ready = False
 
+
+from reportlab.pdfgen import canvas as _rl_canvas
+
+
+class _PageNumCanvas(_rl_canvas.Canvas):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._saved_page_states = []
+
+    def showPage(self):
+        self._saved_page_states.append(dict(self.__dict__))
+        self._startPage()
+
+    def save(self):
+        num_pages = len(self._saved_page_states)
+        for state in self._saved_page_states:
+            self.__dict__.update(state)
+            self._draw_page_number(num_pages)
+            super().showPage()
+        super().save()
+
+    def _draw_page_number(self, page_count: int):
+        self.setFont("Helvetica", 9)
+        self.drawRightString(545, 20, f"Str. {self._pageNumber}/{page_count}")
 
 @app.on_event("startup")
 def _startup():
@@ -274,6 +298,7 @@ def offer_meta(
     note: str = Form(""),
     place: str = Form(""),
     signed_by: str = Form(""),
+    vat_rate: float = Form(0),
 ):
     user, resp = _require_user(request)
     if resp:
@@ -285,6 +310,18 @@ def offer_meta(
     if _is_locked(offer):
         return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
 
+
+@app.post("/offer/accept")
+def offer_accept(request: Request):
+    user, resp = _require_user(request)
+    if resp:
+        return resp
+
+    offer_id = _get_or_create_offer_id(request)
+    accept_offer(user=user, offer_id=offer_id)
+    return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
+
+
     update_offer_meta(
         user=user,
         offer_id=offer_id,
@@ -293,6 +330,7 @@ def offer_meta(
         note=(note or "").strip() or None,
         place=(place or "").strip() or None,
         signed_by=(signed_by or "").strip() or None,
+        vat_rate=float(vat_rate or 0),
     )
     return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
 
@@ -402,7 +440,13 @@ def offer_excel(request: Request):
         ws.append([it["name"], qty, price, line_total])
 
     ws.append([])
+    vat_rate = float(offer.get("vat_rate") or 0)
+    vat_amount = subtotal * (vat_rate / 100.0)
+    gross_total = subtotal + vat_amount
+
     ws.append(["", "", "Međuzbroj", subtotal])
+    ws.append(["", "", f"PDV ({vat_rate:.0f}%)", vat_amount])
+    ws.append(["", "", "Ukupno s PDV-om", gross_total])
 
     bio = BytesIO()
     wb.save(bio)
@@ -438,7 +482,7 @@ def offer_pdf(request: Request):
     body_font = PDF_FONT_NAME if _pdf_font_ready else "Helvetica"
 
     bio = BytesIO()
-    c = canvas.Canvas(bio, pagesize=A4)
+    c = _PageNumCanvas(bio, pagesize=A4)
     width, height = A4
 
     y = height - 60
@@ -488,6 +532,11 @@ def offer_pdf(request: Request):
     c.drawString(50, y, f"Korisnik: {user}"); y -= 14
     c.drawString(50, y, f"Klijent: {offer.get('client_name') or ''}"); y -= 14
     c.drawString(50, y, f"Status: {offer.get('status') or 'DRAFT'}"); y -= 14
+    if offer.get("accepted_at"):
+        try:
+            c.drawString(50, y, f"Prihvaćeno: {offer.get('accepted_at').strftime('%d.%m.%Y %H:%M')}"); y -= 14
+        except Exception:
+            pass
     c.drawString(50, y, f"Mjesto: {offer.get('place') or '' }"); y -= 14
     c.drawString(50, y, f"Rok isporuke: {offer.get('terms_delivery') or '' }"); y -= 14
     c.drawString(50, y, f"Rok plaćanja: {offer.get('terms_payment') or '' }"); y -= 14
@@ -547,8 +596,20 @@ def offer_pdf(request: Request):
     c.line(350, y, 545, y)
     y -= 18
     c.setFont(body_font, 12)
+    vat_rate = float(offer.get("vat_rate") or 0)
+    vat_amount = subtotal * (vat_rate / 100.0)
+    gross_total = subtotal + vat_amount
+
     c.drawRightString(440, y, "Međuzbroj:")
     c.drawRightString(545, y, f"{subtotal:.2f} €")
+    y -= 16
+    c.setFont(body_font, 10)
+    c.drawRightString(440, y, f"PDV ({vat_rate:.0f}%):")
+    c.drawRightString(545, y, f"{vat_amount:.2f} €")
+    y -= 16
+    c.setFont(body_font, 12)
+    c.drawRightString(440, y, "Ukupno:")
+    c.drawRightString(545, y, f"{gross_total:.2f} €")
 
     y -= 50
     c.setFont(body_font, 10)
