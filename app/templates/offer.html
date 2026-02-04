@@ -87,11 +87,24 @@
   <a href="/offer.xlsx"><button class="btn" type="button">Download Excel</button></a>
   <a href="/offer.pdf"><button class="btn" type="button">Download PDF</button></a>
 
-  <form method="post" action="/offer/clear" style="margin:0;">
+  {% if offer.get("status") != "ACCEPTED" %}
+<form method="post" action="/offer/accept" style="margin:0;">
+  <button class="btn btn-primary" type="submit" onclick="return confirm('Označiti ponudu kao ACCEPTED?');">Prihvati ponudu</button>
+</form>
+{% endif %}
+
+<form method="post" action="/offer/clear" style="margin:0;">
     <button class="btn btn-danger {% if locked %}disabled{% endif %}" type="submit" onclick="return confirm('Obrisati sve stavke?');">Obriši sve stavke</button>
   </form>
 
-  <div class="subtotal">Međuzbroj: {{ '%.2f'|format(subtotal) }} €</div>
+  <div class="subtotal">
+  Međuzbroj: {{ '%.2f'|format(subtotal) }} €
+  {% set vr = (offer.get("vat_rate") or 0) %}
+  {% set pdv = subtotal * (vr/100.0) %}
+  {% set gross = subtotal + pdv %}
+  • PDV {{ '%.0f'|format(vr) }}%: {{ '%.2f'|format(pdv) }} €
+  • Ukupno: {{ '%.2f'|format(gross) }} €
+</div>
 </div>
 
 <div class="grid">
@@ -143,6 +156,15 @@
       <label>Rok isporuke</label>
       <input name="terms_delivery" value="{{ offer.get('terms_delivery') or '' }}" placeholder="npr. 21 dan" />
     </div>
+    <div>
+      <label>PDV</label>
+      <select name="vat_rate">
+        <option value="0" {% if (offer.get("vat_rate") or 0) == 0 %}selected{% endif %}>0%</option>
+        <option value="13" {% if (offer.get("vat_rate") or 0) == 13 %}selected{% endif %}>13%</option>
+        <option value="25" {% if (offer.get("vat_rate") or 0) == 25 %}selected{% endif %}>25%</option>
+      </select>
+    </div>
+
     <div>
       <label>Rok plaćanja</label>
       <input name="terms_payment" value="{{ offer.get('terms_payment') or '' }}" placeholder="npr. 50% avans, ostatak po isporuci" />
