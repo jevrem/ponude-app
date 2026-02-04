@@ -6,119 +6,230 @@
   <style>
     body { font-family: Arial, sans-serif; margin: 24px; }
     h1 { margin: 0 0 6px 0; }
-    .topbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
-    .muted { color: #666; font-size: 13px; }
-    .actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
-    button { padding: 8px 12px; cursor: pointer; }
-    .btn { border: 1px solid #ccc; background: #f7f7f7; }
-    .btn-primary { border: 1px solid #333; background: #eaeaea; font-weight: bold; }
-    .btn-danger { border: 1px solid #b00; background: #ffeaea; }
-    .form-row { display: grid; grid-template-columns: 1fr 140px 140px 160px 90px; gap: 10px; align-items: end; margin: 18px 0 12px; }
-    label { font-size: 12px; color: #444; display: block; margin-bottom: 4px; }
-    input { width: 100%; padding: 8px; box-sizing: border-box; }
-    input[readonly] { background: #f3f3f3; }
-    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-    th { background: #f5f5f5; }
-    td.num, th.num { text-align: right; }
-    .subtotal { font-weight: bold; }
-    .spacer { height: 10px; }
+    .muted { color:#666; font-size:13px; }
+    .badge { display:inline-block; padding:4px 10px; border:1px solid #ddd; border-radius:8px; background:#fafafa; }
+    .top { display:flex; justify-content:space-between; gap:16px; }
+    .actions { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin: 12px 0; }
+    .btn { border:1px solid #ccc; background:#f7f7f7; padding:8px 12px; cursor:pointer; }
+    .btn-primary { border-color:#333; background:#111; color:#fff; }
+    .btn-danger { border-color:#c00; background:#fff; color:#c00; }
+    .row { display:flex; gap:14px; }
+    .col { flex:1; }
+    label { display:block; font-size:13px; margin: 10px 0 6px; color:#444; }
+    input, select { width:100%; padding:10px; border:1px solid #ccc; }
+    table { width:100%; border-collapse:collapse; margin-top: 14px; }
+    th, td { border:1px solid #ddd; padding:10px; text-align:left; }
+    th { background:#f5f5f5; }
+    .right { text-align:right; }
+    .notice { background:#fff7cc; border:1px solid #f0d24d; padding:10px 12px; margin:10px 0; }
+    .disabled { opacity:0.55; pointer-events:none; }
   </style>
-
-  <script>
-    function updateTotal() {
-      const qty = parseFloat(document.getElementById('qty').value || '0');
-      const price = parseFloat(document.getElementById('price').value || '0');
-      const total = qty * price;
-      document.getElementById('line_total').value = total.toFixed(2);
-    }
-    window.addEventListener('DOMContentLoaded', () => {
-      document.getElementById('qty').addEventListener('input', updateTotal);
-      document.getElementById('price').addEventListener('input', updateTotal);
-      updateTotal();
-    });
-  </script>
 </head>
-
 <body>
-
-<div class="topbar">
-  <div>
-    <h1>Nova ponuda</h1>
-    <div class="muted">Prijavljen: {{ user }}</div>
+  <div class="top">
+    <div>
+      <h1>Ponuda</h1>
+      <div class="muted">Prijavljen: {{ user }}</div>
+      <div class="badge">
+        {{ offer.get("offer_no") or ("#" ~ offer_id) }}
+        {% if offer and offer.get("created_at") %}
+          • {{ offer.get("created_at").strftime('%d.%m.%Y %H:%M') }}
+        {% endif %}
+      </div>
+    </div>
+    <form method="post" action="/logout">
+      <button class="btn" type="submit">Odjava</button>
+    </form>
   </div>
 
-  <form method="post" action="/logout">
-    <button class="btn" type="submit">Odjava</button>
-  </form>
-</div>
+  {% if locked %}
+    <div class="notice"><b>Ova ponuda je zaključana (ACCEPTED).</b> Stavke i klijent se ne mogu mijenjati.</div>
+  {% endif %}
 
-<div class="actions">
-  <a href="/offer.xlsx"><button class="btn" type="button">Download Excel</button></a>
-  <a href="/offer.pdf"><button class="btn" type="button">Download PDF</button></a>
+  <div class="actions">
+    <form method="post" action="/offer/new" style="margin:0;"><button class="btn" type="submit">Nova ponuda</button></form>
+    <a class="btn" href="/offers" style="text-decoration:none; display:inline-block;">Sve ponude</a>
+    <a class="btn" href="/settings" style="text-decoration:none; display:inline-block;">Postavke firme</a>
 
-  <form method="post" action="/offer/clear" style="margin:0;">
-    <button class="btn btn-danger" type="submit">Obriši sve stavke</button>
-  </form>
+    <span class="muted">|</span>
 
-  <div class="subtotal">Međuzbroj: {{ '%.2f'|format(subtotal) }} €</div>
-</div>
+    <button class="btn" type="button" onclick="window.location='/offer/meta'">Meta (debug)</button>
 
-<div class="spacer"></div>
+    <span class="muted">|</span>
 
-<form method="post" action="/offer/add">
-  <div class="form-row">
-    <div>
-      <label>Naziv</label>
-      <input name="name" placeholder="npr. Ormar po mjeri" required />
+    <form method="post" action="/offer/accept" style="margin:0;">
+      <button class="btn btn-primary {% if locked %}disabled{% endif %}" type="submit">Prihvati ponudu</button>
+    </form>
+
+    <form method="post" action="/offer/clear" style="margin:0;">
+      <button class="btn btn-danger {% if locked %}disabled{% endif %}" type="submit">Obriši sve stavke</button>
+    </form>
+
+    <div style="flex:1"></div>
+    <div><b>Međuzbroj:</b> {{ '%.2f'|format(subtotal) }} € • <b>PDV {{ '%.0f'|format(vat_rate) }}%:</b> {{ '%.2f'|format(vat_amount) }} € • <b>Ukupno:</b> {{ '%.2f'|format(total) }} €</div>
+  </div>
+
+  <div class="row">
+    <div class="col">
+      <form method="post" action="/offer/client" style="margin:0;">
+        <label>Naziv klijenta</label>
+        <div class="row">
+          <div class="col">
+            <input name="client_name" placeholder="npr. Ivan Horvat" value="{{ offer.get('client_name','') }}" {% if locked %}disabled{% endif %}/>
+          </div>
+          <div style="width:120px;">
+            <button class="btn btn-primary {% if locked %}disabled{% endif %}" type="submit">Spremi</button>
+          </div>
+        </div>
+        <div class="muted" style="margin-top:6px;">Ovo ide u PDF i Excel.</div>
+      </form>
     </div>
 
-    <div>
-      <label>Količina</label>
-      <input id="qty" name="qty" type="number" step="0.01" value="1" required />
-    </div>
-
-    <div>
-      <label>Cijena</label>
-      <input id="price" name="price" type="number" step="0.01" value="0" required />
-    </div>
-
-    <div>
-      <label>Ukupno</label>
-      <input id="line_total" type="text" value="0.00" readonly />
-    </div>
-
-    <div>
-      <label>&nbsp;</label>
-      <button class="btn btn-primary" type="submit">Dodaj</button>
+    <div class="col">
+      <form method="post" action="/offer/status" style="margin:0;">
+        <label>Status</label>
+        <div class="row">
+          <div class="col">
+            <select name="status" {% if offer.get('status')=='ACCEPTED' %}disabled{% endif %}>
+              {% set st = (offer.get("status") or "DRAFT") %}
+              <option value="DRAFT" {% if st=="DRAFT" %}selected{% endif %}>DRAFT</option>
+              <option value="SENT" {% if st=="SENT" %}selected{% endif %}>SENT</option>
+              <option value="REJECTED" {% if st=="REJECTED" %}selected{% endif %}>REJECTED</option>
+              <option value="ACCEPTED" {% if st=="ACCEPTED" %}selected{% endif %}>ACCEPTED</option>
+            </select>
+          </div>
+          <div style="width:120px;">
+            <button class="btn btn-primary" type="submit">Spremi</button>
+          </div>
+        </div>
+        <div class="muted" style="margin-top:6px;">Samo ACCEPTED zaključava ponudu.</div>
+      </form>
     </div>
   </div>
-</form>
 
-<table>
-  <thead>
-    <tr>
-      <th>Naziv</th>
-      <th class="num">Količina</th>
-      <th class="num">Cijena</th>
-      <th class="num">Ukupno</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for it in items %}
+  <hr style="margin:16px 0;">
+
+  <h3>Detalji za PDF</h3>
+  <form id="metaForm" method="post" action="/offer/meta" style="margin:0;">
+    <div class="row">
+      <div class="col">
+        <label>Mjesto</label>
+        <input name="place" placeholder="npr. Velika Gorica" value="{{ offer.get('place','') }}" {% if locked %}disabled{% endif %}/>
+      </div>
+      <div class="col">
+        <label>Potpis (ime i prezime)</label>
+        <input name="sign_name" placeholder="npr. Marko Makaj" value="{{ offer.get('sign_name','') }}" {% if locked %}disabled{% endif %}/>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col">
+        <label>Rok isporuke</label>
+        <input name="delivery_term" placeholder="npr. 21 dan" value="{{ offer.get('delivery_term','') }}" {% if locked %}disabled{% endif %}/>
+      </div>
+      <div class="col">
+        <label>Rok plaćanja</label>
+        <input name="payment_term" placeholder="npr. 50% avans, ostatak po isporuci" value="{{ offer.get('payment_term','') }}" {% if locked %}disabled{% endif %}/>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col">
+        <label>Napomena</label>
+        <input name="note" placeholder="npr. Ponuda vrijedi 7 dana." value="{{ offer.get('note','') }}" {% if locked %}disabled{% endif %}/>
+      </div>
+      <div class="col">
+        <label>PDV</label>
+        <select name="vat_rate" {% if locked %}disabled{% endif %}>
+          {% set vr = (offer.get("vat_rate") or 0) %}
+          <option value="0" {% if vr==0 %}selected{% endif %}>0%</option>
+          <option value="5" {% if vr==5 %}selected{% endif %}>5%</option>
+          <option value="13" {% if vr==13 %}selected{% endif %}>13%</option>
+          <option value="25" {% if vr==25 %}selected{% endif %}>25%</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="text-align:right; margin-top:10px;">
+      <button class="btn btn-primary {% if locked %}disabled{% endif %}" type="submit">Spremi detalje za PDF</button>
+      <span id="metaOk" class="muted" style="margin-left:10px;"></span>
+    </div>
+  </form>
+
+  <hr style="margin:16px 0;">
+
+  <h3>Stavke</h3>
+  <form method="post" action="/offer/add" style="margin:0;" class="{% if locked %}disabled{% endif %}">
+    <div class="row">
+      <div class="col">
+        <label>Naziv</label>
+        <input name="name" placeholder="npr. Ormar po mjeri" />
+      </div>
+      <div style="width:140px;">
+        <label>Količina</label>
+        <input name="qty" value="1" />
+      </div>
+      <div style="width:140px;">
+        <label>Cijena</label>
+        <input name="price" value="0" />
+      </div>
+      <div style="width:140px; align-self:flex-end;">
+        <button class="btn btn-primary" type="submit">Dodaj</button>
+      </div>
+    </div>
+  </form>
+
+  <table>
+    <thead>
       <tr>
-        <td>{{ it.name }}</td>
-        <td class="num">{{ '%.2f'|format(it.qty) }}</td>
-        <td class="num">{{ '%.2f'|format(it.price) }}</td>
-        <td class="num">{{ '%.2f'|format(it.line_total) }}</td>
+        <th>Naziv</th>
+        <th class="right">Količina</th>
+        <th class="right">Cijena</th>
+        <th class="right">Ukupno</th>
+        <th>Obriši</th>
       </tr>
-    {% else %}
-      <tr>
-        <td colspan="4" class="muted">Nema stavki još. Dodaj prvu stavku gore.</td>
-      </tr>
-    {% endfor %}
-  </tbody>
-</table>
+    </thead>
+    <tbody>
+      {% if items and (items|length > 0) %}
+        {% for it in items %}
+          <tr>
+            <td>{{ it.get("name") }}</td>
+            <td class="right">{{ '%.2f'|format(it.get("qty") or 0) }}</td>
+            <td class="right">{{ '%.2f'|format(it.get("price") or 0) }}</td>
+            <td class="right">{{ '%.2f'|format(it.get("line_total") or 0) }}</td>
+            <td>
+              <form method="post" action="/offer/delete" style="margin:0;" class="{% if locked %}disabled{% endif %}">
+                <input type="hidden" name="item_id" value="{{ it.get('id') }}">
+                <button class="btn btn-danger" type="submit">×</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      {% else %}
+        <tr><td colspan="5" class="muted">Nema stavki još. Dodaj prvu stavku gore.</td></tr>
+      {% endif %}
+    </tbody>
+  </table>
+
+<script>
+  // Prevent "null" / "Not Found" by submitting meta via fetch, keeping user on /offer.
+  const metaForm = document.getElementById("metaForm");
+  const metaOk = document.getElementById("metaOk");
+  if (metaForm) {
+    metaForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      metaOk.textContent = "Spremam...";
+      try {
+        const res = await fetch(metaForm.action, { method: "POST", body: new FormData(metaForm) });
+        const data = await res.json();
+        metaOk.textContent = data && data.ok ? "Spremljeno ✓" : "Greška";
+      } catch (err) {
+        metaOk.textContent = "Greška";
+      }
+      setTimeout(()=>{ metaOk.textContent=""; }, 2500);
+    });
+  }
+</script>
 
 </body>
 </html>
