@@ -316,9 +316,6 @@ def offer_meta(
         vat_rate=float(vat_rate or 0),
     )
     return RedirectResponse(url="/offer", status_code=HTTP_303_SEE_OTHER)
-
-
-@app.
 @app.post("/offer/accept")
 def offer_accept(request: Request):
     user, resp = _require_user(request)
