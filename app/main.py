@@ -60,7 +60,7 @@ def _offer_context(request: Request, user: str) -> dict:
     vat_rate = float(offer.get("vat_rate") or 0)
     vat_amount = subtotal * (vat_rate / 100.0)
     total = subtotal + vat_amount
-    settings = get_settings(user) or {}
+    settings = get_settings(user) or {}  # dict
     locked = (offer.get("status") == "ACCEPTED")  # ONLY ACCEPTED locks edits
 
     return {

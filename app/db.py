@@ -275,9 +275,10 @@ def update_offer_meta(
 
 
 
-def get_settings(user: str):
+def get_settings(user: str) -> dict:
+    """Return company settings for user as a plain dict (never a psycopg Row)."""
     with get_conn() as conn:
-        return conn.execute(
+        row = conn.execute(
             """
             select user_name, company_name, company_address, company_oib, company_iban,
                    company_email, company_phone, logo_path
@@ -286,7 +287,7 @@ def get_settings(user: str):
             """,
             (user,),
         ).fetchone()
-
+        return dict(row) if row else {}
 
 
 def upsert_settings(
