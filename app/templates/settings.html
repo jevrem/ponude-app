@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="hr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Postavke firme</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 18px 22px; max-width: 1040px; margin: 0 auto; }
+    h1 { margin: 0 0 8px; }
+    .muted { color:#666; font-size:13px; }
+    .actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin: 10px 0; }
+    .btn { border:1px solid #ccc; background:#f7f7f7; padding:8px 12px; cursor:pointer; border-radius:10px; }
+    .btn-primary { border:1px solid #222; background:#eaeaea; font-weight:bold; }
+    .btn-danger { border:1px solid #c33; background:#fff2f2; }
+    label { display:block; font-size:13px; margin: 10px 0 6px; color:#444; }
+    input { width:100%; padding:10px; border:1px solid #ccc; border-radius:10px; box-sizing:border-box; }
+    .grid { display:grid; grid-template-columns: 1fr 1fr; gap: 12px; max-width: 980px; }
+    .full { grid-column: 1 / -1; }
+    .ok { background:#eaffea; border:1px solid #86d786; padding:10px 12px; margin:10px 0; border-radius:12px; }
+    .card { border:1px solid #eee; border-radius:14px; padding:12px; background:#fff; }
+    .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .spacer { flex:1; }
+  </style>
+</head>
+<body>
+  <h1>Postavke firme</h1>
+  <div class="muted">Prijavljen: {{ user }}</div>
+
+  <div class="actions">
+    <a href="/offer"><button class="btn" type="button">Nazad na ponudu</button></a>
+    <a href="/offers"><button class="btn" type="button">Sve ponude</button></a>
+    <form method="post" action="/logout" style="margin:0;"><button class="btn" type="submit">Odjava</button></form>
+
+    <p class="muted">Email slanje: konfiguriraj Render env varijable <b>SMTP_HOST</b>, <b>SMTP_PORT</b>, <b>SMTP_USER</b>, <b>SMTP_PASS</b> (opcionalno <b>SMTP_TLS</b>=0).</p>
+  </div>
+
+  {% if ok %}<div class="ok">Spremljeno ✓</div>{% endif %}
+
+  <div class="card">
+    <form method="post" action="/settings" enctype="multipart/form-data">
+      <div class="grid">
+        <div class="full">
+          <label>Naziv firme</label>
+          <input name="company_name" value="{{ settings.get('company_name') or '' }}" placeholder="npr. Amaryllis interijeri" />
+        </div>
+
+        <div class="full">
+          <label>Adresa</label>
+          <input name="company_address" value="{{ settings.get('company_address') or '' }}" placeholder="npr. Ulica 1, 10410 Velika Gorica" />
+        </div>
+
+        <div>
+          <label>OIB</label>
+          <input name="company_oib" value="{{ settings.get('company_oib') or '' }}" placeholder="npr. 12345678901" />
+        </div>
+
+        <div>
+          <label>IBAN</label>
+          <input name="company_iban" value="{{ settings.get('company_iban') or '' }}" placeholder="npr. HR..." />
+        </div>
+
+        <div>
+          <label>Email</label>
+          <input name="company_email" value="{{ settings.get('company_email') or '' }}" placeholder="npr. info@firma.hr" />
+        </div>
+
+        <div>
+          <label>Telefon</label>
+          <input name="company_phone" value="{{ settings.get('company_phone') or '' }}" placeholder="npr. +385 99 123 4567" />
+        </div>
+
+        <div class="full">
+          <label>Logo (upload)</label>
+          <input type="file" name="logo_file" accept="image/*" />
+          <div class="muted" style="margin-top:6px;">
+            {% if settings.get('has_logo') %}
+              Trenutno: učitan logo{% if settings.get('logo_filename') %} ({{ settings.get('logo_filename') }}){% endif %}.
+              Možeš učitati novi da ga zamijeniš.
+            {% else %}
+              Nema učitanog loga. (Opcionalno)
+            {% endif %}
+            • Max 2MB.
+          </div>
+          {% if settings.get('has_logo') %}
+          <div class="row" style="margin-top:10px;">
+            <form method="post" action="/settings/logo/clear" style="margin:0;">
+              <button class="btn btn-danger" type="submit">Ukloni logo</button>
+            </form>
+          </div>
+          {% endif %}
+        </div>
+
+        <div class="full">
+          <label>Logo path (legacy / opcionalno)</label>
+          <input name="logo_path" value="{{ settings.get('logo_path') or '' }}" placeholder="default: app/static/logo.png" />
+          <div class="muted" style="margin-top:6px;">Ako želiš koristiti statički logo iz repozitorija, možeš ga staviti u <b>app/static/logo.png</b> i ovdje ostaviti prazno.</div>
+        </div>
+
+        <div class="full row" style="justify-content:flex-end;">
+          <button class="btn btn-primary" type="submit">Spremi</button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <div class="muted" style="margin-top:10px;">
+    Napomena: logo se sprema u bazu (Neon) i automatski se koristi u PDF-u.
+  </div>
+</body>
+</html>
