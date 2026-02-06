@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="hr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sve ponude</title>
+  <style>
+    body{font-family:Arial,sans-serif;margin:24px;}
+    .muted{color:#666;font-size:13px;}
+    .actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0;}
+    .btn{border:1px solid #ccc;background:#f7f7f7;padding:8px 12px;cursor:pointer;}
+    table{width:100%;border-collapse:collapse;margin-top:12px;}
+    th,td{border:1px solid #ddd;padding:10px;}
+    th{background:#f2f2f2;text-align:left;}
+  </style>
+</head>
+<body>
+  <h1>Sve ponude</h1>
+  <div class="muted">Prijavljen: {{ user }}</div>
+  <div class="actions">
+    <a href="/offer"><button class="btn" type="button">Nazad</button></a>
+    <a href="/settings"><button class="btn" type="button">Postavke firme</button></a>
+    <form method="post" action="/logout" style="margin:0;">
+      <button class="btn" type="submit">Odjava</button>
+    </form>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>ID</th><th>Datum</th><th>Klijent</th><th>Status</th><th>PDV</th><th>Otvori</th></tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+        <tr>
+          <td>{{ r.id }}</td>
+          <td>{{ r.created_at }}</td>
+          <td>{{ r.client_name }}</td>
+          <td>{{ r.status }}</td>
+          <td>{{ r.vat_rate }}%</td>
+          <td>
+            <form method="post" action="/offers/open" style="margin:0;">
+              <input type="hidden" name="offer_id" value="{{ r.id }}">
+              <button class="btn" type="submit">Otvori</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+      {% if rows|length == 0 %}
+        <tr><td colspan="6" class="muted">Nema ponuda.</td></tr>
+      {% endif %}
+    </tbody>
+  </table>
+</body>
+</html>
