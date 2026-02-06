@@ -1,19 +1,20 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="hr">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Postavke firme</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 24px; }
-    h1 { margin: 0 0 6px 0; }
-    .muted { color:#666; font-size:13px; }
-    .actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top: 10px; }
-    .btn { border:1px solid #ccc; background:#f7f7f7; padding:8px 12px; cursor:pointer; }
-    label { display:block; font-size:13px; margin: 10px 0 6px; color:#444; }
-    input { width:100%; padding:10px; border:1px solid #ccc; }
-    .row { display:flex; gap:14px; }
-    .col { flex:1; }
-    .ok { background:#eaffea; border:1px solid #86d786; padding:10px 12px; margin:10px 0; }
+    body{font-family:Arial,sans-serif;margin:24px;}
+    .muted{color:#666;font-size:13px;}
+    .actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0;}
+    .btn{border:1px solid #ccc;background:#f7f7f7;padding:8px 12px;cursor:pointer;}
+    .btn-primary{border:1px solid #333;background:#eaeaea;font-weight:bold;}
+    label{display:block;font-size:13px;margin:10px 0 6px;color:#444;}
+    input{width:100%;padding:10px;border:1px solid #ccc;box-sizing:border-box;}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:900px;}
+    .full{grid-column:1/-1;}
+    .ok{background:#eaffea;border:1px solid #86d786;padding:10px 12px;margin:10px 0;}
   </style>
 </head>
 <body>
@@ -21,37 +22,49 @@
   <div class="muted">Prijavljen: {{ user }}</div>
 
   <div class="actions">
-    <a class="btn" href="/offer" style="text-decoration:none;">Nazad</a>
-    <form method="post" action="/logout" style="margin:0;"><button class="btn" type="submit">Odjava</button></form>
+    <a href="/offer"><button class="btn" type="button">Nazad na ponudu</button></a>
+    <a href="/offers"><button class="btn" type="button">Sve ponude</button></a>
+    <form method="post" action="/logout" style="margin:0;">
+      <button class="btn" type="submit">Odjava</button>
+    </form>
   </div>
 
-  {% if ok %}
-    <div class="ok">Spremljeno ✓</div>
-  {% endif %}
+  {% if ok %}<div class="ok">Spremljeno ✓</div>{% endif %}
 
   <form method="post" action="/settings">
-    <label>Naziv firme</label>
-    <input name="company_name" value="{{ s.get('company_name','') }}" placeholder="npr. Amaryllis interijeri" />
-
-    <label>Adresa</label>
-    <input name="company_address" value="{{ s.get('company_address','') }}" placeholder="npr. Ulica 1, 10410 Velika Gorica" />
-
-    <div class="row">
-      <div class="col">
+    <div class="grid">
+      <div class="full">
+        <label>Naziv firme</label>
+        <input name="company_name" value="{{ settings.get('company_name') or '' }}" placeholder="npr. Amaryllis interijeri">
+      </div>
+      <div class="full">
+        <label>Adresa</label>
+        <input name="company_address" value="{{ settings.get('company_address') or '' }}" placeholder="npr. Ulica 1, 10410 Velika Gorica">
+      </div>
+      <div>
         <label>OIB</label>
-        <input name="company_oib" value="{{ s.get('company_oib','') }}" placeholder="npr. 12345678901" />
+        <input name="company_oib" value="{{ settings.get('company_oib') or '' }}" placeholder="npr. 12345678901">
       </div>
-      <div class="col">
+      <div>
+        <label>IBAN</label>
+        <input name="company_iban" value="{{ settings.get('company_iban') or '' }}" placeholder="npr. HR...">
+      </div>
+      <div>
+        <label>Email</label>
+        <input name="company_email" value="{{ settings.get('company_email') or '' }}" placeholder="npr. info@firma.hr">
+      </div>
+      <div>
         <label>Telefon</label>
-        <input name="company_phone" value="{{ s.get('company_phone','') }}" placeholder="npr. +385 99 123 4567" />
+        <input name="company_phone" value="{{ settings.get('company_phone') or '' }}" placeholder="npr. +385 99 123 4567">
       </div>
-    </div>
-
-    <label>Email</label>
-    <input name="company_email" value="{{ s.get('company_email','') }}" placeholder="npr. info@firma.hr" />
-
-    <div style="margin-top:12px;">
-      <button class="btn" type="submit">Spremi</button>
+      <div class="full">
+        <label>Putanja do loga (opcionalno)</label>
+        <input name="logo_path" value="{{ settings.get('logo_path') or '' }}" placeholder="default: app/static/logo.png">
+        <div class="muted" style="margin-top:6px;">Ako dodaš logo u repo kao <b>app/static/logo.png</b>, ostavi prazno.</div>
+      </div>
+      <div class="full" style="display:flex;justify-content:flex-end;">
+        <button class="btn btn-primary" type="submit">Spremi</button>
+      </div>
     </div>
   </form>
 </body>
