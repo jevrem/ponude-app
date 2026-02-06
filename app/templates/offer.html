@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="hr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ponuda</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 18px 22px; max-width: 1040px; margin: 0 auto; }
+    h1 { margin: 0 0 6px; }
+    .muted { color:#666; font-size:13px; }
+    .topbar { display:flex; justify-content:space-between; align-items:flex-start; gap:14px; flex-wrap:wrap; }
+    .pill { display:inline-flex; gap:8px; align-items:center; padding:6px 10px; border:1px solid #ddd; border-radius:999px; background:#fafafa; font-size:13px; }
+    .status { font-weight:700; }
+    .status.draft { color:#444; }
+    .status.accepted { color:#0b6b2b; }
+    .status.archived { color:#8a2f2f; }
+    .actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin: 10px 0; }
+    .btn { border:1px solid #ccc; background:#f7f7f7; padding:8px 12px; cursor:pointer; border-radius:10px; }
+    .btn-primary { border:1px solid #222; background:#eaeaea; font-weight:bold; }
+    .btn-danger { border:1px solid #c33; background:#fff2f2; }
+    .btn-green { border:1px solid #0b6b2b; background:#eaffea; font-weight:bold; }
+    .btn-ghost { border:1px dashed #bbb; background:#fff; }
+    label { display:block; font-size:13px; margin: 10px 0 6px; color:#444; }
+    input, select, textarea { width:100%; padding:10px; border:1px solid #ccc; border-radius:10px; box-sizing:border-box; }
+    textarea { min-height: 74px; }
+    table { width:100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border-bottom: 1px solid #eee; padding: 8px 6px; }
+    th { text-align:left; font-size: 13px; color:#333; }
+    td.num, th.num { text-align:right; white-space: nowrap; }
+    .grid { display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .full { grid-column: 1 / -1; }
+    .ok { background:#eaffea; border:1px solid #86d786; padding:10px 12px; margin:10px 0; border-radius:12px; }
+    .err { background:#fff3f3; border:1px solid #e2a1a1; padding:10px 12px; margin:10px 0; border-radius:12px; }
+    .card { border:1px solid #eee; border-radius:14px; padding:12px; background:#fff; }
+    .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .spacer { flex:1; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div>
+      <h1>Ponuda</h1>
+      <div class="muted">Prijavljen: {{ user }}</div>
+    </div>
+
+    <div class="pill">
+      <span>Aktivna:</span>
+      <b>#{{ offer.get("offer_no") or offer.get("id") }}</b>
+      {% if offer.get("created_at") %}<span class="muted">• {{ offer.get("created_at") }}</span>{% endif %}
+      {% set st = offer.get("status","DRAFT") %}
+      {% if offer.get("archived") %}
+        <span class="muted">•</span><span class="status archived">ARCHIVED</span>
+      {% else %}
+        <span class="muted">•</span>
+        {% if st == "ACCEPTED" %}
+          <span class="status accepted">ACCEPTED</span>
+        {% elif st == "SENT" %}
+          <span class="status draft">SENT</span>
+        {% else %}
+          <span class="status draft">DRAFT</span>
+        {% endif %}
+      {% endif %}
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="actions">
+    <form method="post" action="/offer/new" style="margin:0;">
+      <button class="btn" type="submit">Nova ponuda</button>
+    </form>
+    <a href="/offers"><button class="btn" type="button">Sve ponude</button></a>
+    <a href="/settings"><button class="btn" type="button">Postavke firme</button></a>
+    <form method="post" action="/logout" style="margin:0;">
+      <button class="btn" type="submit">Odjava</button>
+    </form>
+
+    <div class="spacer"></div>
+
+    {% if not offer.get("archived") %}
+      {% if offer.get("status","DRAFT") != "ACCEPTED" %}
+        <form method="post" action="/offer/accept" style="margin:0;">
+          <button class="btn btn-green" type="submit">Zaključaj (ACCEPTED)</button>
+        </form>
+      {% else %}
+        <form method="post" action="/offer/unlock" style="margin:0;">
+          <button class="btn btn-ghost" type="submit">Otključaj (DRAFT)</button>
+        </form>
+      {% endif %}
+      <form method="post" action="/offer/archive" style="margin:0;">
+        <button class="btn btn-danger" type="submit">Arhiviraj</button>
+      </form>
+    {% endif %}
+  </div>
+
+  {% if ok %}<div class="ok">{{ ok }}</div>{% endif %}
+  {% if err %}<div class="err">{{ err }}</div>{% endif %}
+
+  {% if offer.get("archived") %}
+        <span class="muted">•</span><span class="status archived">ARCHIVED</span>
+      {% else %}
+        <span class="muted">•</span>
+        {% if st == "ACCEPTED" %}
+          <span class="status accepted">ACCEPTED</span>
+        {% elif st == "SENT" %}
+          <span class="status draft">SENT</span>
+        {% else %}
+          <span class="status draft">DRAFT</span>
+        {% endif %}
+      {% endif %}
+
+  <div class="grid">
+
+    <div class="full card">
+      <form method="post" action="/offer/client" style="margin:0;">
+        <label>Naziv klijenta</label>
+        <div class="row">
+          <input name="client_name" placeholder="npr. Ivan Horvat" value="{{ offer.get('client_name','') }}" {% if offer.get('status')=='ACCEPTED' or offer.get('archived') %}readonly{% endif %} />
+          <button class="btn btn-primary" type="submit" {% if offer.get('status')=='ACCEPTED' or offer.get('archived') %}disabled{% endif %}>Spremi</button>
+        </div>
+        <div class="muted" style="margin-top:6px;">Ovo ide u PDF i Excel.</div>
+      </form>
+    </div>
+
+    <div class="card">
+      <label>PDV</label>
+      <div style="padding:6px 0;"><b>25%</b> <span class="muted">(zaključano)</span></div>
+    </div>
+
+    <div class="card">
+      <label>Ukupno</label>
+      <input readonly value="{{ '%.2f'|format(total) }} €" />
+      <div class="muted">Međuzbroj: {{ '%.2f'|format(subtotal) }} € • PDV: {{ '%.2f'|format(vat) }} €</div>
+    </div>
+
+    {% if not offer.get("archived") %}
+      <div class="full card" style="margin-top:12px;">
+        <div class="row">
+          <h3 style="margin:0;">Slanje emailom</h3>
+          <div class="spacer"></div>
+          <span class="muted">
+            Status: <b>{{ offer.get('status','DRAFT') }}</b>
+            {% if offer.get('sent_at') %} · sent_at {{ offer.get('sent_at') }}{% endif %}
+          </span>
+        </div>
+
+        {% if offer.get('last_email_at') %}
+          <div class="muted" style="margin-top:6px;">
+            Zadnje slanje: <b>{{ offer.get('last_email_at') }}</b>
+            {% if offer.get('last_email_to') %} · to <b>{{ offer.get('last_email_to') }}</b>{% endif %}
+            {% if offer.get('last_email_error') %}
+              <div class="err" style="margin-top:8px;">Zadnja greška: {{ offer.get('last_email_error') }}</div>
+            {% else %}
+              <div class="ok" style="margin-top:8px;">Zadnje slanje uspješno ✓</div>
+            {% endif %}
+          </div>
+        {% endif %}
+
+        <form method="post" action="/offer/send" class="grid" style="margin-top:12px;">
+          <div class="full">
+            <label>Primatelj</label>
+            <input name="to_email" type="email" value="{{ offer.get('client_email','') }}" placeholder="klijent@email.com" required />
+          </div>
+          <div class="full">
+            <label>Subject</label>
+            <input name="subject" value="Ponuda {{ offer.get('offer_no') or offer.get('id') }} – {{ offer.get('client_name') or '' }}" />
+          </div>
+          <div class="full">
+            <label>Poruka</label>
+            <textarea name="body" rows="5">Pozdrav{% if offer.get('client_name') %} {{ offer.get('client_name') }}{% endif %},
+
+U privitku je ponuda {{ offer.get('offer_no') or offer.get('id') }}.
+
+Lijep pozdrav,
+{{ settings.get('company_name') or user }}</textarea>
+          </div>
+          <div class="full">
+            <button class="btn btn-green" type="submit">Pošalji / Ponovno pošalji</button>
+            <span class="muted">Za slanje treba Render env: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS (+ opcionalno SMTP_TLS=0)</span>
+          </div>
+        </form>
+      </div>
+{% else %}
+      <div class="full card" style="margin-top:12px;">
+        <h3 style="margin:0 0 6px;">Slanje emailom</h3>
+        <div class="muted">Arhivirane ponude se ne šalju. Vrati iz arhive ako trebaš poslati.</div>
+      </div>
+{% endif %}
