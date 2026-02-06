@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="hr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dashboard</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 18px 22px; max-width: 1040px; margin: 0 auto; }
+    h1 { margin: 0 0 8px; }
+    .muted { color:#666; font-size:13px; }
+    .actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin: 10px 0; }
+    .btn { border:1px solid #ccc; background:#f7f7f7; padding:8px 12px; cursor:pointer; border-radius:10px; }
+    table { width:100%; border-collapse:collapse; margin-top:12px; }
+    th, td { border-bottom:1px solid #eee; padding:10px 8px; text-align:left; }
+    th { background:#fafafa; }
+    td.num, th.num { text-align:right; }
+    .card { border:1px solid #eee; border-radius:14px; padding:14px; background:#fff; margin-top:14px; }
+  </style>
+</head>
+<body>
+  <div class="actions">
+    <a href="/offer"><button class="btn" type="button">Ponuda</button></a>
+    <a href="/offers"><button class="btn" type="button">Sve ponude</button></a>
+    <a href="/backup/export"><button class="btn" type="button">Backup ZIP</button></a>
+    <a href="/admin/users"><button class="btn" type="button">Admin Users</button></a>
+    <a href="/admin/audit"><button class="btn" type="button">Audit</button></a>
+    <a href="/settings"><button class="btn" type="button">Settings</button></a>
+  </div>
+
+{% if admin_view == "audit" %}
+  <h1>Audit log</h1>
+  <div class="muted">Zadnjih {{ audit_rows|length }} zapisa</div>
+  <table>
+    <thead>
+      <tr>
+        <th>Vrijeme</th>
+        <th>Korisnik</th>
+        <th>Akcija</th>
+        <th>Offer ID</th>
+        <th>IP</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in audit_rows %}
+      <tr>
+        <td>{{ r.created_at }}</td>
+        <td>{{ r.username }}</td>
+        <td>{{ r.action }}</td>
+        <td>{{ r.offer_id or "" }}</td>
+        <td>{{ r.ip or "" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% elif admin_view == "users" %}
+  <h1>Korisnici</h1>
+  <div class="muted">Kreiranje korisnika je admin-only. (Napomena: login je trenutno admin-only, korisnike dodajemo za buduće.)</div>
+  <div class="card">
+    <form method="post" action="/admin/users/create">
+      <label>Novi username</label>
+      <input name="username" placeholder="npr. ana" required />
+      <div style="margin-top:10px;">
+        <button class="btn" type="submit">Kreiraj</button>
+      </div>
+    </form>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Username</th>
+        <th>Created</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for u in users %}
+      <tr>
+        <td>{{ u.id }}</td>
+        <td>{{ u.username }}</td>
+        <td>{{ u.created_at }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <h1>Dashboard</h1>
+  <div class="muted">Korisnik: <b>{{ user }}</b> · Godina: <b>{{ year }}</b></div>
+
+  <div class="card">
+    <div style="display:flex; gap:14px; flex-wrap:wrap;">
+      <div><div class="muted">Međuzbroj (aktivne)</div><div style="font-size:20px;"><b>{{ "%.2f"|format(subtotal) }} €</b></div></div>
+      <div><div class="muted">PDV 25%</div><div style="font-size:20px;"><b>{{ "%.2f"|format(vat) }} €</b></div></div>
+      <div><div class="muted">Ukupno</div><div style="font-size:20px;"><b>{{ "%.2f"|format(total) }} €</b></div></div>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Mjesec</th>
+        <th class="num">Broj ponuda</th>
+        <th class="num">Međuzbroj (€)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in monthly %}
+      <tr>
+        <td>{{ "%02d"|format(m.month) }}</td>
+        <td class="num">{{ m.offers_count }}</td>
+        <td class="num">{{ "%.2f"|format(m.subtotal) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <p class="muted" style="margin-top:10px;">
+    Napomena: ovo gleda samo <b>aktivne</b> ponude (ne arhivirane).
+  </p>
+{% endif %}
+</body>
+</html>
