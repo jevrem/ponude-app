@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="hr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ponude</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 18px 22px; max-width: 1040px; margin: 0 auto; }
+    h1 { margin: 0 0 8px; }
+    .muted { color:#666; font-size:13px; }
+    .actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin: 10px 0; }
+    .btn { border:1px solid #ccc; background:#f7f7f7; padding:8px 12px; cursor:pointer; border-radius:10px; }
+    .btn-danger { border:1px solid #c33; background:#fff2f2; }
+    .tabs { display:flex; gap:8px; align-items:center; margin: 10px 0 6px; flex-wrap:wrap; }
+    .tab { padding:6px 10px; border:1px solid #ddd; border-radius:999px; background:#fafafa; font-size:13px; text-decoration:none; color:#222; }
+    .tab.active { border-color:#222; background:#eaeaea; font-weight:700; }
+    table { width:100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border-bottom: 1px solid #eee; padding: 8px 6px; }
+    th { text-align:left; font-size: 13px; color:#333; }
+    td.num, th.num { text-align:right; white-space: nowrap; }
+    .badge { display:inline-block; padding:3px 8px; border:1px solid #ddd; border-radius:999px; font-size:12px; background:#fafafa; }
+    .badge.accepted { border-color:#0b6b2b; background:#eaffea; }
+    .badge.draft { border-color:#bbb; }
+    .badge.archived { border-color:#8a2f2f; background:#fff3f3; }
+    .ok { background:#eaffea; border:1px solid #86d786; padding:10px 12px; margin:10px 0; border-radius:12px; }
+    .err { background:#fff3f3; border:1px solid #e2a1a1; padding:10px 12px; margin:10px 0; border-radius:12px; }
+  </style>
+</head>
+<body>
+  <h1>Ponude</h1>
+  <div class="muted">Prijavljen: {{ user }}</div>
+
+  <div class="actions">
+    <a href="/offer"><button class="btn" type="button">Nazad na ponudu</button></a>
+    <a href="/settings"><button class="btn" type="button">Postavke firme</button></a>
+    <a href="/dashboard"><button class="btn" type="button">Dashboard</button></a>
+    <a href="/backup"><button class="btn" type="button">Backup</button></a>
+    <form method="post" action="/logout" style="margin:0;"><button class="btn" type="submit">Odjava</button></form>
+  </div>
+
+  {% if ok %}<div class="ok">Spremljeno ✓</div>{% endif %}
+  {% if err %}<div class="err">{{ err }}</div>{% endif %}
+
+  
+<div class="tabs">
+  <a class="tab {% if show=='active' %}active{% endif %}" href="/offers?show=active&status={{ status }}&invoice={{ invoice }}&paid={{ paid }}&q={{ q }}">Aktivne</a>
+  <a class="tab {% if show=='archived' %}active{% endif %}" href="/offers?show=archived&invoice={{ invoice }}&paid={{ paid }}&q={{ q }}">Arhiva</a>
+  <a class="tab {% if show=='all' %}active{% endif %}" href="/offers?show=all&status={{ status }}&invoice={{ invoice }}&paid={{ paid }}&q={{ q }}">Sve</a>
+</div>
+
+{% if show != 'archived' %}
+<div class="tabs">
+  <a class="tab {% if status=='ALL' %}active{% endif %}" href="/offers?show={{ show }}&status=ALL&invoice={{ invoice }}&paid={{ paid }}&q={{ q }}">Svi statusi</a>
+  <a class="tab {% if status=='DRAFT' %}active{% endif %}" href="/offers?show={{ show }}&status=DRAFT&invoice={{ invoice }}&paid={{ paid }}&q={{ q }}">DRAFT</a>
+  <a class="tab {% if status=='SENT' %}active{% endif %}" href="/offers?show={{ show }}&status=SENT&invoice={{ invoice }}&paid={{ paid }}&q={{ q }}">SENT</a>
+  <a class="tab {% if status=='ACCEPTED' %}active{% endif %}" href="/offers?show={{ show }}&status=ACCEPTED&invoice={{ invoice }}&paid={{ paid }}&q={{ q }}">ACCEPTED</a>
+</div>
+{% endif %}
+
+
+<div class="tabs">
+  <a class="tab {% if invoice=='ALL' %}active{% endif %}" href="/offers?show={{ show }}{% if show != 'archived' %}&status={{ status }}{% endif %}&invoice=ALL&paid={{ paid }}&q={{ q }}">Svi (računi)</a>
+  <a class="tab {% if invoice=='YES' %}active{% endif %}" href="/offers?show={{ show }}{% if show != 'archived' %}&status={{ status }}{% endif %}&invoice=YES&paid={{ paid }}&q={{ q }}">Samo s računom</a>
+  <a class="tab {% if invoice=='NO' %}active{% endif %}" href="/offers?show={{ show }}{% if show != 'archived' %}&status={{ status }}{% endif %}&invoice=NO&paid={{ paid }}&q={{ q }}">Bez računa</a>
+</div>
+
+<div class="tabs">
+  <a class="tab {% if paid=='ALL' %}active{% endif %}" href="/offers?show={{ show }}{% if show != 'archived' %}&status={{ status }}{% endif %}&invoice={{ invoice }}&paid=ALL&q={{ q }}">Svi (plaćanje)</a>
+  <a class="tab {% if paid=='PAID' %}active{% endif %}" href="/offers?show={{ show }}{% if show != 'archived' %}&status={{ status }}{% endif %}&invoice={{ invoice }}&paid=PAID&q={{ q }}">Plaćeno</a>
+  <a class="tab {% if paid=='UNPAID' %}active{% endif %}" href="/offers?show={{ show }}{% if show != 'archived' %}&status={{ status }}{% endif %}&invoice={{ invoice }}&paid=UNPAID&q={{ q }}">Nije plaćeno</a>
+</div>
+
+
+<form method="get" action="/offers" class="actions" style="margin-top:6px;">
+  <input type="hidden" name="show" value="{{ show }}">
+  <input type="hidden" name="invoice" value="{{ invoice }}">
+  <input type="hidden" name="paid" value="{{ paid }}">
+  <select name="client" style="padding:10px; border:1px solid #ccc; border-radius:10px;">
+    <option value="ALL" {% if (client or "ALL")=="ALL" %}selected{% endif %}>Svi klijenti</option>
+    {% for c in clients %}
+      <option value="{{ c.get("name","")|e }}" {% if (client or "")==c.get("name","") %}selected{% endif %}>{{ c.get("name","") }}</option>
+    {% endfor %}
+  </select>
+  {% if show != 'archived' %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
+  <input name="q" value="{{ q }}" placeholder="Pretraga (broj / klijent / email)" style="flex:1; min-width:240px; padding:10px; border:1px solid #ccc; border-radius:10px;">
+  <button class="btn" type="submit">Traži</button>
+  {% if q %}<a class="btn" href="/offers?show={{ show }}{% if show!='archived' %}&status={{ status }}{% endif %}">Reset</a>{% endif %}
+</form>
+
+<table>
+    <thead>
+      <tr>
+        <th>Broj</th>
+        <th>Klijent</th>
+        <th>Datum</th>
+        <th>Status</th>
+        <th>Račun</th>
+        <th>Plaćeno</th>
+        <th class="num">Međuzbroj</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for o in offers %}
+      <tr>
+        <td>{{ o["offer_no"] or o["id"] }}</td>
+        <td>{{ o["client_name"] or "" }}</td>
+        <td>{{ o["created_at"] }}</td>
+        <td>
+          {% if o.get("invoice_no") %}
+    <form method="get" action="/invoice/pdf" style="display:inline; margin:0;">
+      <input type="hidden" name="offer_id" value="{{ o['id'] }}">
+      <button class="btn" type="submit">PDF računa</button>
+    </form>
+    <form method="post" action="/invoice/paid" style="display:inline; margin:0;">
+      <input type="hidden" name="offer_id" value="{{ o['id'] }}">
+      <input type="hidden" name="paid" value="{{ '0' if o.get('paid') else '1' }}">
+      <button class="btn" type="submit">{{ 'Označi NIJE' if o.get('paid') else 'Označi PLAĆENO' }}</button>
+    </form>
+  {% endif %}
+
+  {% if o.get("archived") %}
+            <span class="badge archived">ARCHIVED</span>
+          {% else %}
+            {% if o["status"] == "ACCEPTED" %}
+              <span class="badge accepted">ACCEPTED</span>
+            {% elif o["status"] == "SENT" %}
+              <span class="badge draft">SENT</span>
+            {% else %}
+              <span class="badge draft">DRAFT</span>
+            {% endif %}
+          {% endif %}
+        </td>
+        <td>
+          {% if o.get("invoice_no") %}
+            <span class="badge">{{ o.get("invoice_no") }}</span>
+          {% else %}
+            <span class="muted">—</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if o.get("invoice_no") %}
+            {% if o.get("paid") %}
+              <span class="badge accepted">PLAĆENO</span>
+            {% else %}
+              <span class="badge">NIJE</span>
+            {% endif %}
+          {% else %}
+            <span class="muted">—</span>
+          {% endif %}
+        </td>
+        <td class="num">{{ '%.2f'|format(o["subtotal"]) }} €</td>
+        <td style="text-align:right; white-space:nowrap;">
+  <form method="post" action="/offers/open" style="display:inline; margin:0;">
+    <input type="hidden" name="offer_id" value="{{ o['id'] }}">
+    <button class="btn" type="submit">Otvori</button>
+  </form>
+
+  <form method="post" action="/offer/duplicate" style="display:inline; margin:0;">
+    <input type="hidden" name="offer_id" value="{{ o['id'] }}">
+    <button class="btn" type="submit">Dupliciraj</button>
+  </form>
+
+  {% if o.get("invoice_no") %}
+    <form method="get" action="/invoice/pdf" style="display:inline; margin:0;">
+      <input type="hidden" name="offer_id" value="{{ o['id'] }}">
+      <button class="btn" type="submit">PDF računa</button>
+    </form>
+    <form method="post" action="/invoice/paid" style="display:inline; margin:0;">
+      <input type="hidden" name="offer_id" value="{{ o['id'] }}">
+      <input type="hidden" name="paid" value="{{ '0' if o.get('paid') else '1' }}">
+      <button class="btn" type="submit">{{ 'Označi NIJE' if o.get('paid') else 'Označi PLAĆENO' }}</button>
+    </form>
+  {% endif %}
+
+  {% if o.get("archived") %}
+    <form method="post" action="/offer/unarchive" style="display:inline; margin:0;">
+      <input type="hidden" name="offer_id" value="{{ o['id'] }}">
+      <button class="btn" type="submit">Vrati</button>
+    </form>
+    <form method="post" action="/offer/delete" style="display:inline; margin:0;" onsubmit="return confirm('Trajno obrisati ovu ponudu?');">
+      <input type="hidden" name="offer_id" value="{{ o['id'] }}">
+      <button class="btn btn-danger" type="submit">Obriši</button>
+    </form>
+  {% else %}
+    <form method="post" action="/offer/archive" style="display:inline; margin:0;" onsubmit="return confirm('Arhivirati ovu ponudu?');">
+      <input type="hidden" name="offer_id" value="{{ o['id'] }}">
+      <button class="btn btn-danger" type="submit">Arhiviraj</button>
+    </form>
+  {% endif %}
+</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="muted" style="margin-top:10px;">
+    Savjet: “Arhiviraj” je sigurno brisanje (soft-delete). Trajno brisanje je moguće samo iz arhive.
+  </div>
+</body>
+</html>

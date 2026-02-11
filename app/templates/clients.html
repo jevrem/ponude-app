@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="hr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Klijenti</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 18px 22px; max-width: 1100px; margin: 0 auto; }
+    h1 { margin: 0 0 8px; }
+    .muted { color:#666; font-size:13px; }
+    .actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin: 10px 0 14px; }
+    .btn { border:1px solid #ccc; background:#f7f7f7; padding:8px 12px; cursor:pointer; border-radius:10px; }
+    .btn-primary { border:1px solid #222; background:#eaeaea; font-weight:bold; }
+    .ok { background:#eaffea; border:1px solid #86d786; padding:10px 12px; margin:10px 0; border-radius:12px; }
+    .err { background:#fff3f3; border:1px solid #e2a1a1; padding:10px 12px; margin:10px 0; border-radius:12px; }
+    table { width:100%; border-collapse: collapse; }
+    th, td { border-bottom:1px solid #eee; padding:8px 6px; vertical-align:top; }
+    th { text-align:left; font-size:13px; color:#333; }
+    input, textarea { width:100%; padding:8px; border:1px solid #ccc; border-radius:10px; box-sizing:border-box; }
+    textarea { min-height: 44px; }
+    .grid { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+    .full { grid-column: 1 / -1; }
+  </style>
+</head>
+<body>
+  <h1>Klijenti</h1>
+  <div class="muted">Prijavljen: {{ user }}</div>
+
+  <div class="actions">
+    <a href="/offer"><button class="btn" type="button">Aktivna ponuda</button></a>
+    <a href="/offers"><button class="btn" type="button">Sve ponude</button></a>
+    <a href="/settings"><button class="btn" type="button">Postavke</button></a>
+    <form method="post" action="/logout" style="margin:0;"><button class="btn" type="submit">Odjava</button></form>
+  </div>
+
+  {% if ok %}<div class="ok">{{ ok }}</div>{% endif %}
+  {% if err %}<div class="err">{{ err }}</div>{% endif %}
+
+  <div style="border:1px solid #eee; border-radius:14px; padding:12px; background:#fff; margin-bottom:14px;">
+    <h2 style="margin:0 0 8px;">Dodaj / ažuriraj klijenta</h2>
+    <form method="post" action="/clients/upsert">
+      <div class="grid">
+        <div class="full">
+          <label class="muted">Naziv</label>
+          <input name="name" placeholder="npr. Ivan Horvat" />
+        </div>
+        <div>
+          <label class="muted">E-mail</label>
+          <input name="email" placeholder="npr. klijent@email.com" />
+        </div>
+        <div>
+          <label class="muted">OIB</label>
+          <input name="oib" placeholder="12345678901" />
+        </div>
+        <div class="full">
+          <label class="muted">Adresa</label>
+          <input name="address" placeholder="Ulica i broj, grad" />
+        </div>
+        <div class="full">
+          <label class="muted">Napomena</label>
+          <textarea name="note" placeholder="npr. kontakt osoba, posebni uvjeti..."></textarea>
+        </div>
+      </div>
+      <div style="display:flex; justify-content:flex-end; margin-top:10px;">
+        <button class="btn btn-primary" type="submit">Spremi</button>
+      </div>
+    </form>
+  </div>
+
+  <h2 style="margin:0 0 8px;">Popis</h2>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:22%;">Naziv</th>
+        <th style="width:18%;">E-mail</th>
+        <th style="width:16%;">OIB</th>
+        <th>Adresa / napomena</th>
+        <th style="width:110px;">Akcija</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in clients %}
+      <tr>
+        <form method="post" action="/clients/upsert">
+          <td><input name="name" value="{{ c.get('name','') }}" /></td>
+          <td><input name="email" value="{{ c.get('email','') or '' }}" /></td>
+          <td><input name="oib" value="{{ c.get('oib','') or '' }}" /></td>
+          <td>
+            <input name="address" value="{{ c.get('address','') or '' }}" placeholder="Adresa" style="margin-bottom:6px;" />
+            <textarea name="note" placeholder="Napomena">{{ c.get('note','') or '' }}</textarea>
+          </td>
+          <td><button class="btn btn-primary" type="submit">Spremi</button></td>
+        </form>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="muted" style="margin-top:10px;">
+    Tip: u ponudi možeš odabrati klijenta iz liste i automatski povući e-mail/adresu/OIB.
+  </div>
+</body>
+</html>

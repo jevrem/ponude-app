@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="hr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ponuda</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 18px 22px; max-width: 1040px; margin: 0 auto; }
+    h1 { margin: 0 0 6px; }
+    .muted { color:#666; font-size:13px; }
+    .topbar { display:flex; justify-content:space-between; align-items:flex-start; gap:14px; flex-wrap:wrap; }
+    .pill { display:inline-flex; gap:8px; align-items:center; padding:6px 10px; border:1px solid #ddd; border-radius:999px; background:#fafafa; font-size:13px; }
+    .status { font-weight:700; }
+    .status.draft { color:#444; }
+    .status.accepted { color:#0b6b2b; }
+    .status.archived { color:#8a2f2f; }
+    .actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin: 10px 0; }
+    .btn { border:1px solid #ccc; background:#f7f7f7; padding:8px 12px; cursor:pointer; border-radius:10px; }
+    .btn-primary { border:1px solid #222; background:#eaeaea; font-weight:bold; }
+    .btn-danger { border:1px solid #c33; background:#fff2f2; }
+    .btn-green { border:1px solid #0b6b2b; background:#eaffea; font-weight:bold; }
+    .btn-ghost { border:1px dashed #bbb; background:#fff; }
+    label { display:block; font-size:13px; margin: 10px 0 6px; color:#444; }
+    input, select, textarea { width:100%; padding:10px; border:1px solid #ccc; border-radius:10px; box-sizing:border-box; }
+    textarea { min-height: 74px; }
+    table { width:100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border-bottom: 1px solid #eee; padding: 8px 6px; }
+    th { text-align:left; font-size: 13px; color:#333; }
+    td.num, th.num { text-align:right; white-space: nowrap; }
+    .grid { display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .full { grid-column: 1 / -1; }
+    .ok { background:#eaffea; border:1px solid #86d786; padding:10px 12px; margin:10px 0; border-radius:12px; }
+    .err { background:#fff3f3; border:1px solid #e2a1a1; padding:10px 12px; margin:10px 0; border-radius:12px; }
+    .card { border:1px solid #eee; border-radius:14px; padding:12px; background:#fff; }
+    .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .spacer { flex:1; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div>
+      <h1>Ponuda</h1>
+      <div class="muted">Prijavljen: {{ user }}</div>
+    </div>
+
+    <div class="pill">
+      <span>Aktivna:</span>
+      <b>#{{ offer.get("offer_no") or offer.get("id") }}</b>
+      {% if offer.get("created_at") %}<span class="muted">• {{ offer.get("created_at") }}</span>{% endif %}
+      {% set st = offer.get("status","DRAFT") %}
+      {% if offer.get("archived") %}
+        <span class="muted">•</span><span class="status archived">ARCHIVED</span>
+      {% else %}
+        <span class="muted">•</span>
+        {% if st == "ACCEPTED" %}
+          <span class="status accepted">ACCEPTED</span>
+        {% elif st == "SENT" %}
+          <span class="status draft">SENT</span>
+        {% else %}
+          <span class="status draft">DRAFT</span>
+        {% endif %}
+      {% endif %}
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="actions">
+    <form method="post" action="/offer/new" style="margin:0;">
+      <button class="btn" type="submit">Nova ponuda</button>
+    </form>
+    <a href="/offers"><button class="btn" type="button">Sve ponude</button></a>
+    <a href="/settings"><button class="btn" type="button">Postavke firme</button></a>
+    <form method="post" action="/logout" style="margin:0;">
+      <button class="btn" type="submit">Odjava</button>
+    </form>
+
+    <div class="spacer"></div>
+
+    {% if not offer.get("archived") %}
+      {% if offer.get("status","DRAFT") != "ACCEPTED" %}
+        <form method="post" action="/offer/accept" style="margin:0;">
+          <button class="btn btn-green" type="submit">Zaključaj (ACCEPTED)</button>
+        </form>
+      {% else %}
+        <form method="post" action="/offer/unlock" style="margin:0;">
+          <button class="btn btn-ghost" type="submit">Otključaj (DRAFT)</button>
+        </form>
+      {% endif %}
+      <form method="post" action="/offer/archive" style="margin:0;">
+        <button class="btn btn-danger" type="submit">Arhiviraj</button>
+      </form>
+    {% endif %}
+  </div>
+
+  {% if ok %}<div class="ok">{{ ok }}</div>{% endif %}
+  {% if err %}<div class="err">{{ err }}</div>{% endif %}
+
+  {% if offer.get("archived") %}
+        <span class="muted">•</span><span class="status archived">ARCHIVED</span>
+      {% else %}
+        <span class="muted">•</span>
+        {% if st == "ACCEPTED" %}
+          <span class="status accepted">ACCEPTED</span>
+        {% elif st == "SENT" %}
+          <span class="status draft">SENT</span>
+        {% else %}
+          <span class="status draft">DRAFT</span>
+        {% endif %}
+      {% endif %}
+
+  <div class="grid">
+
+    <div class="full card">
+      <form method="post" action="/offer/client" style="margin:0;">
+  <label>Naziv klijenta</label>
+  <div class="row">
+    <input id="client_name" name="client_name" list="clients_list" placeholder="npr. Ivan Horvat"
+           value="{{ offer.get('client_name','') }}"
+           {% if offer.get('status')=='ACCEPTED' or offer.get('archived') %}readonly{% endif %} />
+    <button class="btn btn-primary" type="submit" {% if offer.get('status')=='ACCEPTED' or offer.get('archived') %}disabled{% endif %}>Spremi</button>
+  </div>
+  <datalist id="clients_list">
+    {% for c in clients %}
+      <option value="{{ c.get('name','')|e }}"></option>
+    {% endfor %}
+  </datalist>
+
+  <div class="grid" style="margin-top:10px;">
+    <div>
+      <label>E-mail klijenta</label>
+      <input id="client_email" name="client_email" placeholder="npr. klijent@email.com" value="{{ offer.get('client_email','') }}"
+             {% if offer.get('status')=='ACCEPTED' or offer.get('archived') %}readonly{% endif %} />
+    </div>
+    <div>
+      <label>OIB klijenta</label>
+      <input id="client_oib" name="client_oib" placeholder="npr. 12345678901" value="{{ offer.get('client_oib','') }}"
+             {% if offer.get('status')=='ACCEPTED' or offer.get('archived') %}readonly{% endif %} />
+    </div>
+    <div class="full">
+      <label>Adresa klijenta</label>
+      <input id="client_address" name="client_address" placeholder="Ulica i broj, grad" value="{{ offer.get('client_address','') }}"
+             {% if offer.get('status')=='ACCEPTED' or offer.get('archived') %}readonly{% endif %} />
+    </div>
+  </div>
+
+  <div class="muted" style="margin-top:6px;">
+    Tip: počni tipkati naziv pa izaberi iz liste. Ako klijent postoji u imeniku, polja će se automatski popuniti.
+    <a href="/clients">Otvori imenik klijenata</a>.
+  </div>
+</form>
+
+<script>
+  const CLIENTS = [
+    {% for c in clients %}
+      {name: "{{ (c.get('name','') or '')|e }}", email: "{{ (c.get('email','') or '')|e }}", address: "{{ (c.get('address','') or '')|e }}", oib: "{{ (c.get('oib','') or '')|e }}"}{% if not loop.last %},{% endif %}
+    {% endfor %}
+  ];
+
+  function applyClientDetails(nm) {
+    const found = CLIENTS.find(c => (c.name || "").toLowerCase() === (nm || "").toLowerCase());
+    if (!found) return;
+    const email = document.getElementById("client_email");
+    const addr = document.getElementById("client_address");
+    const oib = document.getElementById("client_oib");
+    if (email && !email.value) email.value = found.email || "";
+    if (addr && !addr.value) addr.value = found.address || "";
+    if (oib && !oib.value) oib.value = found.oib || "";
+  }
+
+  const clientNameEl = document.getElementById("client_name");
+  if (clientNameEl) {
+    clientNameEl.addEventListener("change", (e) => applyClientDetails(e.target.value));
+    clientNameEl.addEventListener("blur", (e) => applyClientDetails(e.target.value));
+  }
+</script>
+    </div>
+
+    <div class="card">
+      <label>PDV</label>
+      <div style="padding:6px 0;"><b>25%</b> <span class="muted">(zaključano)</span></div>
+    </div>
+
+    <div class="card">
+      <label>Ukupno</label>
+      <input readonly value="{{ '%.2f'|format(total) }} €" />
+      <div class="muted">Međuzbroj: {{ '%.2f'|format(subtotal) }} € • PDV: {{ '%.2f'|format(vat) }} €</div>
+    </div>
+
+    {% if not offer.get("archived") %}
+      <div class="full card" style="margin-top:12px;">
+        <div class="row">
+          <h3 style="margin:0;">Slanje emailom</h3>
+          <div class="spacer"></div>
+          <span class="muted">
+            Status: <b>{{ offer.get('status','DRAFT') }}</b>
+            {% if offer.get('sent_at') %} · sent_at {{ offer.get('sent_at') }}{% endif %}
+          </span>
+        </div>
+
+        {% if offer.get('last_email_at') %}
+          <div class="muted" style="margin-top:6px;">
+            Zadnje slanje: <b>{{ offer.get('last_email_at') }}</b>
+            {% if offer.get('last_email_to') %} · to <b>{{ offer.get('last_email_to') }}</b>{% endif %}
+            {% if offer.get('last_email_error') %}
+              <div class="err" style="margin-top:8px;">Zadnja greška: {{ offer.get('last_email_error') }}</div>
+            {% else %}
+              <div class="ok" style="margin-top:8px;">Zadnje slanje uspješno ✓</div>
+            {% endif %}
+          </div>
+        {% endif %}
+
+        {% if smtp_configured %}
+        <form method="post" action="/offer/send" class="grid" style="margin-top:12px;">
+          <div class="full">
+            <label>Primatelj</label>
+            <input name="to_email" type="email" value="{{ offer.get('client_email','') }}" placeholder="klijent@email.com" required />
+          </div>
+          <div class="full">
+            <label>Subject</label>
+            <input name="subject" value="" placeholder="(prazno = koristi template iz Settings)" />
+          </div>
+          <div class="full">
+            <label>Poruka</label>
+            <textarea name="body" rows="5" placeholder="(prazno = koristi template iz Settings)"></textarea>
+          </div>
+          <div class="full">
+            <button class="btn btn-green" type="submit">Pošalji / Ponovno pošalji</button>
+            <span class="muted">Za slanje treba Render env: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS (+ opcionalno SMTP_TLS=0)</span>
+          </div>
+        </form>
+        {% else %}
+          <div class="err" style="margin-top:12px;">SMTP nije konfiguriran na serveru.</div>
+          <div class="muted" style="margin-top:8px; line-height:1.45;">
+            Postavi na Renderu (Environment):
+            <ul style="margin:6px 0 0 18px;">
+              <li><b>SMTP_HOST</b> (npr. smtp.gmail.com)</li>
+              <li><b>SMTP_PORT</b> (najčešće 587)</li>
+              <li><b>SMTP_USER</b> (email adresa)</li>
+              <li><b>SMTP_PASS</b> (app password / lozinka)</li>
+              <li>opcionalno <b>SMTP_TLS=0</b> ako ne želiš STARTTLS</li>
+            </ul>
+            Nakon spremanja env varijabli, napravi redeploy.
+          </div>
+        {% endif %}
+      </div>
+{% else %}
+      <div class="full card" style="margin-top:12px;">
+        <h3 style="margin:0 0 6px;">Slanje emailom</h3>
+        <div class="muted">Arhivirane ponude se ne šalju. Vrati iz arhive ako trebaš poslati.</div>
+      </div>
+{% endif %}
+{% if offer.get('status') == 'ACCEPTED' and not offer.get('archived') %}
+  <div class="full card" style="margin-top:12px;">
+    <div class="row">
+      <h3 style="margin:0;">Račun</h3>
+      <div class="spacer"></div>
+      {% if offer.get('invoice_no') %}
+        <span class="pill">Račun: <b>{{ offer.get('invoice_no') }}</b> · {{ offer.get('invoice_date') }}</span>
+      {% else %}
+        <span class="muted">Nema računa za ovu ponudu</span>
+      {% endif %}
+    </div>
+
+    {% if not offer.get('invoice_no') %}
+      <form method="post" action="/invoice/create" style="margin-top:10px;">
+        <button class="btn btn-primary" type="submit">Kreiraj račun iz ACCEPTED ponude</button>
+      </form>
+    {% else %}
+      <div class="actions" style="margin-top:10px;">
+        <a class="btn" href="/invoice/pdf">PDF računa</a>
+        <form method="post" action="/invoice/paid">
+          <input type="hidden" name="paid" value="{{ 0 if offer.get('paid') else 1 }}" />
+          <button class="btn {% if offer.get('paid') %}btn-danger{% else %}btn-green{% endif %}" type="submit">
+            {% if offer.get('paid') %}Označi kao NIJE plaćeno{% else %}Označi kao PLAĆENO{% endif %}
+          </button>
+        </form>
+        <span class="muted">Status: <b>{% if offer.get('paid') %}PLAĆENO{% else %}NIJE PLAĆENO{% endif %}</b></span>
+      </div>
+    {% endif %}
+  </div>
+{% endif %}
+
+
