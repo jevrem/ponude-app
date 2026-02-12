@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="hr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ponuda</title>
+  <style>
+    body{font-family:Arial,sans-serif;padding:18px 22px;max-width:1100px;margin:0 auto;}
+    h1{margin:0 0 6px;}
+    .muted{color:#666;font-size:13px;}
+    .top{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;}
+    .pill{display:inline-flex;gap:8px;align-items:center;padding:6px 10px;border:1px solid #ddd;border-radius:999px;background:#fafafa;font-size:13px;}
+    .actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0;}
+    .btn{border:1px solid #ccc;background:#f7f7f7;padding:8px 12px;cursor:pointer;border-radius:10px;}
+    .btn-primary{border:1px solid #222;background:#eaeaea;font-weight:bold;}
+    .btn-danger{border:1px solid #c33;background:#fff2f2;}
+    .btn-green{border:1px solid #0b6b2b;background:#eaffea;font-weight:bold;}
+    .card{border:1px solid #eee;border-radius:14px;padding:12px;background:#fff;}
+    label{display:block;font-size:13px;margin:10px 0 6px;color:#444;}
+    input,select,textarea{width:100%;padding:10px;border:1px solid #ccc;border-radius:10px;box-sizing:border-box;}
+    textarea{min-height:80px;}
+    table{width:100%;border-collapse:collapse;margin-top:10px;}
+    th,td{border-bottom:1px solid #eee;padding:8px 6px;}
+    th{font-size:13px;color:#333;text-align:left;}
+    .num{text-align:right;white-space:nowrap;}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+    .full{grid-column:1/-1;}
+    .ok{background:#eaffea;border:1px solid #86d786;padding:10px 12px;margin:10px 0;border-radius:12px;}
+    .err{background:#fff3f3;border:1px solid #e2a1a1;padding:10px 12px;margin:10px 0;border-radius:12px;}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+    .spacer{flex:1;}
+    .status{font-weight:700;}
+    .st-draft{color:#444;}
+    .st-sent{color:#444;}
+    .st-acc{color:#0b6b2b;}
+    .st-arch{color:#8a2f2f;}
+  </style>
+
+<style>
+  :root{
+    --bg:#f6f7fb;
+    --fg:#0f172a;
+    --muted:#64748b;
+    --card:#ffffff;
+    --border:#e2e8f0;
+    --shadow:0 6px 18px rgba(15,23,42,.06);
+    --link:#2563eb;
+  }
+  body{background:var(--bg);color:var(--fg);}
+  a{color:var(--link);}
+  .card,.box, .panel, .container, .wrap .card{background:var(--card);border-color:var(--border);}
+  table th{background:rgba(148,163,184,.15);}
+  table th, table td{border-bottom-color:var(--border);}
+  input, select, textarea{background:var(--card);color:var(--fg);border-color:var(--border);}
+  .muted{color:var(--muted)!important;}
+  body.dark{
+    --bg:#0b1220;
+    --fg:#e5e7eb;
+    --muted:#94a3b8;
+    --card:#0f172a;
+    --border:#1f2a44;
+    --shadow:0 10px 24px rgba(0,0,0,.35);
+    --link:#60a5fa;
+  }
+  /* floating toggle */
+  .dm-toggle{
+    position:fixed;left:14px;bottom:14px;z-index:9999;
+    display:flex;gap:8px;align-items:center;
+    padding:8px 10px;border-radius:999px;
+    background:var(--card);border:1px solid var(--border);
+    box-shadow:var(--shadow);cursor:pointer;user-select:none;
+    font-size:12px;color:var(--muted);
+  }
+  .dm-dot{width:10px;height:10px;border-radius:999px;background:#fbbf24;border:1px solid rgba(0,0,0,.08);}
+  body.dark .dm-dot{background:#60a5fa;border-color:rgba(255,255,255,.15);}
+  /* autosave header pill */
+  .save-pill{
+    position:fixed;right:14px;top:14px;z-index:9999;
+    padding:8px 12px;border-radius:999px;
+    background:var(--card);border:1px solid var(--border);
+    box-shadow:var(--shadow);font-size:12px;color:var(--muted);
+    display:none;
+  }
+  .save-pill.ok{border-color:#86efac;color:#14532d;}
+  .save-pill.bad{border-color:#fecaca;color:#7f1d1d;}
+  body.dark .save-pill.ok{color:#86efac;border-color:#14532d;}
+  body.dark .save-pill.bad{color:#fecaca;border-color:#7f1d1d;}
+</style>
+
+</head>
+<body>
+  <div class="top">
+    <div>
+      <h1>Ponuda</h1>
+      <div class="muted">Prijavljen: {{ user }}</div>
+    </div>
+    <div class="pill">
+      <span>Aktivna:</span>
+      <b>#{{ offer.get('offer_no') or offer.get('id') }}</b>
+      {% if offer.get('created_at') %}<span class="muted">• {{ offer.get('created_at') }}</span>{% endif %}
+      {% if offer.get('archived') %}
+        <span class="muted">•</span><span class="status st-arch">ARCHIVED</span>
+      {% else %}
+        {% set st = offer.get('status','DRAFT') %}
+        <span class="muted">•</span>
+        {% if st == 'ACCEPTED' %}<span class="status st-acc">ACCEPTED</span>
+        {% elif st == 'SENT' %}<span class="status st-sent">SENT</span>
+        {% else %}<span class="status st-draft">DRAFT</span>
+        {% endif %}
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="actions">
+    <form method="post" action="/offer/new" style="margin:0;"><button class="btn" type="submit">Nova ponuda</button></form>
+    <a href="/offers"><button class="btn" type="button">Sve ponude</button></a>
+    <a href="/clients"><button class="btn" type="button">Klijenti</button></a>
+    <a href="/settings"><button class="btn" type="button">Postavke</button></a>
+    <form method="post" action="/logout" style="margin:0;"><button class="btn" type="submit">Odjava</button></form>
+    <div class="spacer"></div>
+    {% if not offer.get('archived') %}
+      {% if offer.get('status','DRAFT') != 'ACCEPTED' %}
+        <form method="post" action="/offer/accept" style="margin:0;"><button class="btn btn-green" type="submit">Zaključaj (ACCEPTED)</button></form>
+      {% else %}
+        <form method="post" action="/offer/unlock" style="margin:0;"><button class="btn" type="submit">Otključaj (DRAFT)</button></form>
+      {% endif %}
+      <form method="post" action="/offer/archive" style="margin:0;"><button class="btn btn-danger" type="submit">Arhiviraj</button></form>
+    {% endif %}
+  </div>
+
+  {% if ok %}<div class="ok">{{ ok }}</div>{% endif %}
+  {% if err %}<div class="err">{{ err }}</div>{% endif %}
+
+  <div class="grid">
+    <div class="full card">
+      <form method="post" action="/offer/client" style="margin:0;">
+        <div class="grid">
+          <div class="full">
+            <label>Klijent (naziv)</label>
+            <input name="client_name" list="clients_list" value="{{ offer.get('client_name','') }}" placeholder="npr. Ivan Horvat" {% if not editable %}readonly{% endif %} />
+            <datalist id="clients_list">
+              {% for c in clients %}
+                <option value="{{ c.get('name') }}"></option>
+              {% endfor %}
+            </datalist>
+            <div class="muted">Savjet: za punu adresu/OIB koristi stranicu Klijenti, pa ovdje upiši isti naziv.</div>
+          </div>
+          <div>
+            <label>Email</label>
+            <input name="client_email" type="email" value="{{ offer.get('client_email','') }}" {% if not editable %}readonly{% endif %} />
+          </div>
+          <div>
+            <label>OIB</label>
+            <input name="client_oib" value="{{ offer.get('client_oib','') }}" {% if not editable %}readonly{% endif %} />
+          </div>
+          <div class="full">
+            <label>Adresa</label>
+            <textarea name="client_address" {% if not editable %}readonly{% endif %}>{{ offer.get('client_address','') }}</textarea>
+          </div>
+          <div class="full">
+            <button class="btn btn-primary" type="submit" {% if not editable %}disabled{% endif %}>Spremi</button>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <div class="card">
+      <label>PDV</label>
+      {% if editable %}
+        <form method="post" action="/offer/meta" style="margin-top:6px;">
+          <input type="hidden" name="client_email" value="{{ offer.client_email or '' }}">
+          <input type="hidden" name="terms_delivery" value="{{ offer.terms_delivery or '' }}">
+          <input type="hidden" name="terms_payment" value="{{ offer.terms_payment or '' }}">
+          <input type="hidden" name="note" value="{{ offer.note or '' }}">
+          <input type="hidden" name="place" value="{{ offer.place or '' }}">
+          <input type="hidden" name="signed_by" value="{{ offer.signed_by or '' }}">
+        </div>
+        <div style="margin-top:10px;">
+          <label class="muted" style="display:block;margin-bottom:6px;">Vrijedi do</label>
+          <input type="date" name="valid_until" value="{{ offer.valid_until or '' }}" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:12px;">
+        </div>
+        <div style="margin-top:10px;">
+
+          <select name="vat_rate" onchange="this.form.submit()" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:12px;">
+            <option value="0" {% if (offer.vat_rate or 0)|float == 0 %}selected{% endif %}>0%</option>
+            <option value="25" {% if (offer.vat_rate or 0)|float == 25 %}selected{% endif %}>25%</option>
+          </select>
+        </form>
+      {% else %}
+        <div style="padding:6px 0;"><b>{{ (offer.vat_rate or 0)|int }}%</b></div>
+      {% endif %}
+    </div>
+    </div>
+
+    <div class="card">
+      <label>Ukupno</label>
+      <input readonly value="{{ '%.2f'|format(total) }} €" />
+      <div class="muted">Međuzbroj: {{ '%.2f'|format(subtotal) }} € • PDV: {{ '%.2f'|format(vat) }} €</div>
+    </div>
+
+    <div class="full card">
+      <h3 style="margin:0 0 8px;">Stavke</h3>
+      {% if editable %}
+      <form method="post" action="/offer/items/add" class="grid" style="margin:0;">
+        <div class="full"><label>Naziv</label><input name="name" required /></div>
+        <div><label>Količina</label><input name="qty" type="number" step="0.01" value="1" /></div>
+        <div><label>Cijena</label><input name="price" type="number" step="0.01" value="0" /></div>
+        <div class="full"><button class="btn btn-primary" type="submit">Dodaj stavku</button></div>
+      </form>
+      {% else %}
+        <div class="muted">Ponuda je zaključana ili arhivirana — stavke se ne mogu mijenjati.</div>
+      {% endif %}
+
+      <table>
+        <thead>
+          <tr>
+            <th>Naziv</th>
+            <th class="num">Količina</th>
+            <th class="num">Cijena</th>
+            <th class="num">Ukupno</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for it in items %}
+            <tr>
+              <td>{{ it.get('name') }}</td>
+              <td class="num">{{ '%.2f'|format(it.get('qty')|float) }}</td>
+              <td class="num">{{ '%.2f'|format(it.get('price')|float) }} €</td>
+              <td class="num">{{ '%.2f'|format(it.get('line_total')|float) }} €</td>
+              <td class="num">
+                {% if editable %}
+                <form method="post" action="/offer/items/delete" style="margin:0;">
+                  <input type="hidden" name="item_id" value="{{ it.get('id') }}" />
+                  <button class="btn btn-danger" type="submit">Obriši</button>
+                </form>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      {% if editable and items|length > 0 %}
+        <form method="post" action="/offer/items/clear" style="margin-top:10px;">
+          <button class="btn btn-danger" type="submit">Obriši sve stavke</button>
+        </form>
+      {% endif %}
+    </div>
+
+    <div class="full card">
+      <div class="row">
+        <a class="btn" href="/offer/pdf">Download PDF</a>
+        <a class="btn" href="/offer/excel">Download Excel</a>
+        <a class="btn" href="/dashboard">Dashboard</a>
+        <a class="btn" href="/backup">Backup ZIP</a>
+      </div>
+      <div style="margin-top:10px; padding:10px; border:1px dashed #cbd5e1; border-radius:10px;">
+        <div style="font-weight:600; margin-bottom:6px;">Client portal link</div>
+        {% if portal_url %}
+          <input type="text" value="{{ portal_url }}" readonly style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:8px;" onclick="this.select()">
+          <div style="font-size:12px; color:#64748b; margin-top:6px;">
+            Otvaranja: {{ offer.view_count or 0 }} | Klikovi: {{ offer.click_count or 0 }}
+          </div>
+        {% else %}
+          <div style="color:#ef4444;">Portal link nije dostupan.</div>
+        {% endif %}
+      </div>
+
+    </div>
+
+    {% if not offer.get('archived') %}
+    <div class="full card">
+      <h3 style="margin:0 0 8px;">Slanje emailom</h3>
+      {% if smtp_configured %}
+        <form method="post" action="/offer/send" class="grid" style="margin:0;">
+          <div class="full"><label>Primatelj</label><input name="to_email" type="email" value="{{ offer.get('client_email','') }}" required /></div>
+          <div class="full"><label>Subject (prazno = template)</label><input name="subject" /></div>
+          <div class="full"><label>Poruka (prazno = template)</label><textarea name="body"></textarea></div>
+          <div class="full"><button class="btn btn-green" type="submit">Pošalji</button></div>
+        </form>
+      {% else %}
+        <div class="err">SMTP nije konfiguriran (SMTP_HOST/SMTP_USER/SMTP_PASS).</div>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {% if offer.get('status') == 'ACCEPTED' and not offer.get('archived') %}
+    <div class="full card">
+      <h3 style="margin:0 0 8px;">Račun</h3>
+      {% if offer.get('invoice_no') %}
+        <div class="muted">Račun: <b>{{ offer.get('invoice_no') }}</b> · {{ offer.get('invoice_date') }} · {% if offer.get('paid') %}<b>PLAĆENO</b>{% else %}<b>NIJE PLAĆENO</b>{% endif %}</div>
+        <div class="actions" style="margin:10px 0 0;">
+          <a class="btn" href="/invoice/pdf">PDF računa</a>
+          <form method="post" action="/invoice/paid" style="margin:0;">
+            <input type="hidden" name="paid" value="{{ 0 if offer.get('paid') else 1 }}" />
+            <button class="btn {% if offer.get('paid') %}btn-danger{% else %}btn-green{% endif %}" type="submit">{% if offer.get('paid') %}Označi NIJE plaćeno{% else %}Označi PLAĆENO{% endif %}</button>
+          </form>
+        </div>
+      {% else %}
+        <form method="post" action="/invoice/create" style="margin:0;">
+          <button class="btn btn-primary" type="submit">Kreiraj račun iz ponude</button>
+        </form>
+      {% endif %}
+    </div>
+    {% endif %}
+
+  </div>
+
+<script>
+// AUTO_SAVE
+(function(){
+  const statusEl = document.createElement('div');
+  statusEl.style.position='fixed';
+  statusEl.style.right='14px';
+  statusEl.style.bottom='14px';
+  statusEl.style.padding='8px 12px';
+  statusEl.style.border='1px solid #cbd5e1';
+  statusEl.style.borderRadius='12px';
+  statusEl.style.background='#fff';
+  statusEl.style.boxShadow='0 6px 18px rgba(15,23,42,.08)';
+  statusEl.style.fontSize='12px';
+  statusEl.style.color='#64748b';
+  statusEl.style.display='none';
+  document.body.appendChild(statusEl);
+
+  function show(msg, ok=true){
+    statusEl.textContent = msg;
+    try{ if(window.__savePill) window.__savePill(msg, ok ? 'ok' : 'bad'); }catch(e){}
+    statusEl.style.display='block';
+    statusEl.style.borderColor = ok ? '#86efac' : '#fecaca';
+    statusEl.style.color = ok ? '#14532d' : '#7f1d1d';
+    clearTimeout(show._t);
+    show._t = setTimeout(()=>{ statusEl.style.display='none'; }, 1600);
+  }
+
+  async function postForm(form){
+    const fd = new FormData(form);
+    try{
+      show('Spremam…', true);
+      const res = await fetch(form.action, { method:'POST', body:fd, headers:{'x-requested-with':'fetch','accept':'application/json'} });
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      show('Spremljeno', true);
+    }catch(e){
+      console.error(e);
+      show('Greška pri spremanju', false);
+    }
+  }
+
+  function debounce(fn, ms){
+    let t; return function(){ clearTimeout(t); t = setTimeout(()=>fn.apply(this, arguments), ms); };
+  }
+
+  // Autosave META form
+  const metaForm = document.querySelector('form[action="/offer/meta"]');
+  if(metaForm){
+    const deb = debounce(()=>postForm(metaForm), 600);
+    metaForm.addEventListener('input', (e)=>{ if(e.target && e.target.name) deb(); });
+    metaForm.addEventListener('change', (e)=>{ if(e.target && e.target.name) deb(); });
+  }
+
+  // Autosave CLIENT form (if exists)
+  const clientForm = document.querySelector('form[action="/offer/client"]');
+  if(clientForm){
+    const debC = debounce(()=>postForm(clientForm), 600);
+    clientForm.addEventListener('input', (e)=>{ if(e.target && e.target.name) debC(); });
+    clientForm.addEventListener('change', (e)=>{ if(e.target && e.target.name) debC(); });
+  }
+})();
+</script>
+
+
+<script>
+(function(){
+  const key = 'ponude_theme';
+  function apply(){
+    const v = localStorage.getItem(key) || 'light';
+    document.body.classList.toggle('dark', v === 'dark');
+  }
+  apply();
+
+  // Floating toggle
+  const btn = document.createElement('div');
+  btn.className = 'dm-toggle';
+  btn.innerHTML = '<span class="dm-dot"></span><span>Dark mode</span>';
+  btn.addEventListener('click', () => {
+    const cur = localStorage.getItem(key) || 'light';
+    localStorage.setItem(key, cur === 'dark' ? 'light' : 'dark');
+    apply();
+  });
+  document.body.appendChild(btn);
+
+  // Save pill (used by autosave page; harmless elsewhere)
+  const pill = document.createElement('div');
+  pill.className = 'save-pill';
+  pill.id = 'savePill';
+  document.body.appendChild(pill);
+
+  window.__savePill = function(msg, state){
+    const el = document.getElementById('savePill');
+    if(!el) return;
+    el.textContent = msg || '';
+    el.classList.remove('ok','bad');
+    if(state === 'ok') el.classList.add('ok');
+    if(state === 'bad') el.classList.add('bad');
+    el.style.display = msg ? 'block' : 'none';
+    clearTimeout(window.__savePill._t);
+    window.__savePill._t = setTimeout(()=>{ el.style.display='none'; }, 1600);
+  };
+})();
+</script>
+
+</body>
+</html>
