@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="hr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Backup</title>
+  <style>
+    body{font-family:Arial,sans-serif;padding:18px 22px;max-width:900px;margin:0 auto;}
+    .btn{border:1px solid #ccc;background:#f7f7f7;padding:8px 12px;border-radius:10px;cursor:pointer;}
+    .muted{color:#666;font-size:13px;}
+    .card{border:1px solid #eee;border-radius:14px;padding:12px;margin-top:12px;}
+    .err{background:#fff3f3;border:1px solid #e2a1a1;padding:10px 12px;border-radius:12px;margin:10px 0;}
+    .ok{background:#eaffea;border:1px solid #86d786;padding:10px 12px;border-radius:12px;margin:10px 0;}
+  </style>
+
+<style>
+  :root{
+    --bg:#f6f7fb;
+    --fg:#0f172a;
+    --muted:#64748b;
+    --card:#ffffff;
+    --border:#e2e8f0;
+    --shadow:0 6px 18px rgba(15,23,42,.06);
+    --link:#2563eb;
+  }
+  body{background:var(--bg);color:var(--fg);}
+  a{color:var(--link);}
+  .card,.box, .panel, .container, .wrap .card{background:var(--card);border-color:var(--border);}
+  table th{background:rgba(148,163,184,.15);}
+  table th, table td{border-bottom-color:var(--border);}
+  input, select, textarea{background:var(--card);color:var(--fg);border-color:var(--border);}
+  .muted{color:var(--muted)!important;}
+  body.dark{
+    --bg:#0b1220;
+    --fg:#e5e7eb;
+    --muted:#94a3b8;
+    --card:#0f172a;
+    --border:#1f2a44;
+    --shadow:0 10px 24px rgba(0,0,0,.35);
+    --link:#60a5fa;
+  }
+  /* floating toggle */
+  .dm-toggle{
+    position:fixed;left:14px;bottom:14px;z-index:9999;
+    display:flex;gap:8px;align-items:center;
+    padding:8px 10px;border-radius:999px;
+    background:var(--card);border:1px solid var(--border);
+    box-shadow:var(--shadow);cursor:pointer;user-select:none;
+    font-size:12px;color:var(--muted);
+  }
+  .dm-dot{width:10px;height:10px;border-radius:999px;background:#fbbf24;border:1px solid rgba(0,0,0,.08);}
+  body.dark .dm-dot{background:#60a5fa;border-color:rgba(255,255,255,.15);}
+  /* autosave header pill */
+  .save-pill{
+    position:fixed;right:14px;top:14px;z-index:9999;
+    padding:8px 12px;border-radius:999px;
+    background:var(--card);border:1px solid var(--border);
+    box-shadow:var(--shadow);font-size:12px;color:var(--muted);
+    display:none;
+  }
+  .save-pill.ok{border-color:#86efac;color:#14532d;}
+  .save-pill.bad{border-color:#fecaca;color:#7f1d1d;}
+  body.dark .save-pill.ok{color:#86efac;border-color:#14532d;}
+  body.dark .save-pill.bad{color:#fecaca;border-color:#7f1d1d;}
+</style>
+
+</head>
+<body>
+  <h1>Backup</h1>
+  <div class="muted">Prijavljen: {{ user }}</div>
+  <p><a href="/offer">← Nazad</a></p>
+
+  {% if ok %}<div class="ok">{{ ok }}</div>{% endif %}
+  {% if err %}<div class="err">{{ err }}</div>{% endif %}
+
+  <div class="card">
+    <h3 style="margin:0 0 8px;">Export</h3>
+    <a class="btn" href="/backup/export">Preuzmi Backup ZIP</a>
+  </div>
+
+  <div class="card">
+    <h3 style="margin:0 0 8px;">Restore (import)</h3>
+    <form method="post" action="/backup/import" enctype="multipart/form-data">
+      <input type="file" name="backup_file" accept=".zip,.json" required />
+      <button class="btn" type="submit">Uvezi</button>
+      <div class="muted" style="margin-top:6px;">Restore se po defaultu vraća kao ARCHIVED da ne pregazi aktivne.</div>
+    </form>
+  </div>
+
+<script>
+(function(){
+  const key = 'ponude_theme';
+  function apply(){
+    const v = localStorage.getItem(key) || 'light';
+    document.body.classList.toggle('dark', v === 'dark');
+  }
+  apply();
+
+  // Floating toggle
+  const btn = document.createElement('div');
+  btn.className = 'dm-toggle';
+  btn.innerHTML = '<span class="dm-dot"></span><span>Dark mode</span>';
+  btn.addEventListener('click', () => {
+    const cur = localStorage.getItem(key) || 'light';
+    localStorage.setItem(key, cur === 'dark' ? 'light' : 'dark');
+    apply();
+  });
+  document.body.appendChild(btn);
+
+  // Save pill (used by autosave page; harmless elsewhere)
+  const pill = document.createElement('div');
+  pill.className = 'save-pill';
+  pill.id = 'savePill';
+  document.body.appendChild(pill);
+
+  window.__savePill = function(msg, state){
+    const el = document.getElementById('savePill');
+    if(!el) return;
+    el.textContent = msg || '';
+    el.classList.remove('ok','bad');
+    if(state === 'ok') el.classList.add('ok');
+    if(state === 'bad') el.classList.add('bad');
+    el.style.display = msg ? 'block' : 'none';
+    clearTimeout(window.__savePill._t);
+    window.__savePill._t = setTimeout(()=>{ el.style.display='none'; }, 1600);
+  };
+})();
+</script>
+
+</body>
+</html>
