@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="hr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ title or "Ponude" }}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="container">
+      <div class="brand">Ponude</div>
+      <nav class="nav">
+        <a href="/">Dashboard</a>
+        <a href="/clients">Klijenti</a>
+        <a class="btn" href="/offers/new">Nova ponuda</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    {% if flash %}
+      <div class="flash">{{ flash }}</div>
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="container footer">
+    <small>BUSINESS_PRO • FastAPI + Postgres + Render</small>
+  </footer>
+</body>
+</html>
