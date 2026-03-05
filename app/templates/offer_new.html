@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block content %}
+  <h1>Nova ponuda</h1>
+
+  <form method="post" class="form" id="offerForm">
+    <label>Klijent</label>
+    <select name="client_id" required>
+      {% for c in clients %}
+        <option value="{{ c.id }}">{{ c.name }}</option>
+      {% endfor %}
+    </select>
+
+    <div class="grid2">
+      <div>
+        <label>PDV (%)</label>
+        <input name="vat_rate" type="number" step="0.01" value="25">
+      </div>
+      <div>
+        <label>Cijene su</label>
+        <select name="prices_include_vat">
+          <option value="1" selected>SA PDV-om (bruto)</option>
+          <option value="0">BEZ PDV-a (neto)</option>
+        </select>
+      </div>
+    </div>
+
+    <label>Stavke</label>
+
+    <div class="items">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Opis</th>
+            <th style="text-align:right;">Količina</th>
+            <th style="text-align:right;">Jed. cijena</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="itemsBody">
+          <tr>
+            <td><input name="item_desc[]" placeholder="Opis stavke" required></td>
+            <td><input name="item_qty[]" type="number" step="0.001" value="1" required></td>
+            <td><input name="item_price[]" type="number" step="0.01" value="0" required></td>
+            <td style="text-align:right;"><button class="btn secondary" type="button" onclick="removeRow(this)">X</button></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="row">
+        <button class="btn secondary" type="button" onclick="addRow()">+ Dodaj stavku</button>
+        <div class="hint">Ako ti je lakše, možeš i dalje koristiti stari format (dolje).</div>
+      </div>
+
+      <details class="legacy">
+        <summary>Stari unos (opis | količina | cijena)</summary>
+        <textarea name="items" rows="6" placeholder="Npr: Ugradnja | 1 | 250
+Materijal | 3 | 12.5"></textarea>
+      </details>
+    </div>
+
+    <label>Napomena</label>
+    <textarea name="notes" rows="3" placeholder="Opcionalno..."></textarea>
+
+    <button class="btn" type="submit">Kreiraj ponudu</button>
+  </form>
+
+  <p class="hint">Numeriranje: 01/2026, 02/2026... (reset po godini). Status default: <b>sent</b>.</p>
+
+  <script>
+    function addRow(){
+      const tbody = document.getElementById("itemsBody");
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td><input name="item_desc[]" placeholder="Opis stavke" required></td>
+        <td><input name="item_qty[]" type="number" step="0.001" value="1" required></td>
+        <td><input name="item_price[]" type="number" step="0.01" value="0" required></td>
+        <td style="text-align:right;"><button class="btn secondary" type="button" onclick="removeRow(this)">X</button></td>
+      `;
+      tbody.appendChild(tr);
+    }
+    function removeRow(btn){
+      const tbody = document.getElementById("itemsBody");
+      if(tbody.children.length <= 1) return;
+      btn.closest("tr").remove();
+    }
+  </script>
+{% endblock %}
