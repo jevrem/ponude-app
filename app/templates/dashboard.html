@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block content %}
+  <h1>Dashboard</h1>
+
+  <div class="cards">
+    <div class="card">
+      <div class="card-title">Ukupno ponuda</div>
+      <div class="card-value">{{ stats.total_offers }}</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Prihvaćene</div>
+      <div class="card-value">{{ stats.accepted_offers }}</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Poslane</div>
+      <div class="card-value">{{ stats.sent_offers }}</div>
+    </div>
+  </div>
+
+  <h2>Zadnje ponude</h2>
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Broj</th>
+        <th>Klijent</th>
+        <th>Status</th>
+        <th>Portal</th>
+        <th>PDF</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for o in offers %}
+      <tr>
+        <td><a href="/offers/{{ o.id }}">{{ o.number }}</a></td>
+        <td>{{ o.client_name }}</td>
+        <td><span class="badge badge-{{ o.status }}">{{ o.status }}</span></td>
+        <td><a href="/p/{{ o.portal_token }}" target="_blank">/p/{{ o.portal_token }}</a></td>
+        <td><a href="/offers/{{ o.id }}/pdf" target="_blank">PDF</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}
