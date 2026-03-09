@@ -1,7 +1,0 @@
-{% extends "base.html" %}
-{% block content %}
-  <h1>Ponuda prihvaćena</h1>
-  <p>Hvala! Ponuda <b>{{ offer.number }}</b> je uspješno prihvaćena.</p>
-  <p>Status je sada: <span class="badge badge-accepted">accepted</span></p>
-  <a class="btn" href="/p/{{ offer.portal_token }}">Natrag na ponudu</a>
-{% endblock %}
